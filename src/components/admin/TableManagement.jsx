@@ -25,7 +25,10 @@ export const TableManagement = () => {
   const [editCapacity, setEditCapacity] = useState('4');
   const [selectedWaiters, setSelectedWaiters] = useState({});
   const [assigningOrderId, setAssigningOrderId] = useState(null);
+<<<<<<< HEAD
   const [updatingTableId, setUpdatingTableId] = useState(null);
+=======
+>>>>>>> f739f97c0cfdd9fe7bb9d4366a68447f57a2c010
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -133,6 +136,22 @@ export const TableManagement = () => {
       console.error('Waiter reassignment failed:', err);
       setError('Could not reassign the waiter. Please try again.');
       notify.error('Could not reassign the waiter.', `reassign-error-${order.id}`);
+    } finally {
+      setAssigningOrderId(null);
+    }
+  };
+
+  const handleReassign = async (order) => {
+    const waiterId = selectedWaiters[order.id] || order.waiter_id;
+    if (waiterId === order.waiter_id) return;
+    setError('');
+    setSuccess('');
+    setAssigningOrderId(order.id);
+    try {
+      await reassignOrderWaiter(order.id, waiterId);
+      setSuccess(`Table assignment updated to ${waiters.find((waiter) => waiter.id === waiterId)?.full_name || 'selected waiter'}.`);
+    } catch (err) {
+      setError(err.message || 'Failed to reassign waiter');
     } finally {
       setAssigningOrderId(null);
     }
@@ -333,7 +352,11 @@ export const TableManagement = () => {
 
                     {activeOrder && (
                       <div className="mb-3 space-y-1.5">
+<<<<<<< HEAD
                         <label htmlFor={`waiter-${activeOrder.id}`} className="block text-xs font-semibold text-muted-foreground">
+=======
+                        <label htmlFor={`waiter-${activeOrder.id}`} className="block text-[10px] font-bold text-slate-600">
+>>>>>>> f739f97c0cfdd9fe7bb9d4366a68447f57a2c010
                           Assigned: {activeOrder.profiles?.full_name || 'Waiter'}
                         </label>
                         <select
@@ -343,7 +366,11 @@ export const TableManagement = () => {
                             ...previous,
                             [activeOrder.id]: event.target.value
                           }))}
+<<<<<<< HEAD
                           className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
+=======
+                          className="w-full text-[11px] p-1.5 bg-white border border-[#E8E4DE] rounded-lg"
+>>>>>>> f739f97c0cfdd9fe7bb9d4366a68447f57a2c010
                         >
                           {!waiters.some((waiter) => waiter.id === activeOrder.waiter_id) && (
                             <option value={activeOrder.waiter_id}>
@@ -358,7 +385,11 @@ export const TableManagement = () => {
                           type="button"
                           disabled={assigningOrderId === activeOrder.id || (selectedWaiters[activeOrder.id] || activeOrder.waiter_id) === activeOrder.waiter_id}
                           onClick={() => handleReassign(activeOrder)}
+<<<<<<< HEAD
                           className="min-h-10 w-full rounded-md border border-border bg-surface px-2 text-xs font-semibold text-primary hover:bg-primary-soft disabled:opacity-40"
+=======
+                          className="w-full px-2 py-1.5 bg-white border border-[#E8E4DE] rounded-lg text-[10px] font-bold text-[#C2570C] disabled:opacity-40"
+>>>>>>> f739f97c0cfdd9fe7bb9d4366a68447f57a2c010
                         >
                           {assigningOrderId === activeOrder.id ? 'Reassigning…' : 'Reassign Waiter'}
                         </button>

@@ -88,15 +88,23 @@ export const WaiterTableSelection = ({ onSelectTable }) => {
             const isOccupied = table.status === 'occupied';
             const isPending = table.status === 'bill_pending';
 
-            const activeOrder = activeOrdersMap[table.id];
-            const assignedWaiter = activeOrder?.profiles?.full_name || 'Assigned waiter';
-            const isAssignedWaiter = activeOrder?.waiter_id === user?.id;
-            const isLocked = Boolean(activeOrder && !isAssignedWaiter);
-            const runningTotal = activeOrder?.order_items?.reduce(
-              (sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)),
-              0
-            ) || 0;
-            const statusTone = isAvailable ? 'success' : isOccupied ? 'occupied' : 'pending';
+          const activeOrder = activeOrdersMap[table.id];
+          const runningTotal = activeOrder?.order_items?.reduce(
+            (sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)),
+            0
+          ) || 0;
+
+          const cardTheme = isAvailable
+            ? 'border-emerald-500/50 bg-emerald-50/50 hover:border-emerald-600 hover:bg-emerald-50'
+            : isOccupied
+            ? 'border-amber-500/60 bg-amber-50/60 hover:border-amber-600 hover:bg-amber-50'
+            : 'border-purple-500/60 bg-purple-50/60 hover:border-purple-600 hover:bg-purple-50';
+
+          const badgeTheme = isAvailable
+            ? 'bg-emerald-600 text-white'
+            : isOccupied
+            ? 'bg-amber-600 text-white'
+            : 'bg-purple-600 text-white';
 
             return (
               <button
@@ -123,16 +131,44 @@ export const WaiterTableSelection = ({ onSelectTable }) => {
                     </div>
                   )}
                 </div>
-                <div className="mt-4 flex min-h-10 items-center justify-between border-t border-border pt-3">
-                  {isAvailable && <><span className="text-sm font-semibold text-success-foreground">Take order</span><ArrowRight aria-hidden="true" className="h-4 w-4 text-primary" /></>}
-                  {isOccupied && <div><p className="text-xs font-medium text-muted-foreground">Running total</p><p className="font-bold text-foreground">{formatINR(runningTotal)}</p></div>}
-                  {isPending && <span className="text-sm font-semibold text-warning-foreground">Awaiting admin approval</span>}
+
+                <div className="mt-1">
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeTheme}`}>
+                    {isAvailable ? 'Available' : isOccupied ? 'Occupied' : 'Bill Pending'}
+                  </span>
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+              </div>
+
+              {/* Status details */}
+              <div className="mt-4 pt-2.5 border-t border-black/10">
+                {isAvailable && (
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                    <span>Take Order</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                )}
+
+                {isOccupied && (
+                  <div>
+                    <div className="text-[10px] text-amber-900 font-semibold uppercase">
+                      Running Total
+                    </div>
+                    <div className="text-base font-bold text-[#14532D]">
+                      {formatINR(runningTotal)}
+                    </div>
+                  </div>
+                )}
+
+                {isPending && (
+                  <div className="text-[11px] text-purple-900 font-bold leading-tight">
+                    Awaiting Admin Approval
+                  </div>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

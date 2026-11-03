@@ -29,10 +29,6 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
       (o) => o.table_id === table.id && (o.status === 'active' || o.status === 'correction')
     );
   }, [orders, table.id]);
-  const isReadOnly = Boolean(activeOrder && activeOrder.waiter_id !== user?.id);
-  const assignedWaiterName = activeOrder?.profiles?.full_name ||
-    (activeOrder?.waiter_id === user?.id ? profile?.full_name : null) ||
-    'Assigned waiter';
 
   // Local cart state for live manipulation
   const [cartItems, setCartItems] = useState([]);
@@ -127,11 +123,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   };
 
   // Save order to Supabase
-  const handleSaveOrder = async (showSuccessToast = true) => {
-    if (isReadOnly) {
-      setStatusMessage({ type: 'error', text: `Only ${assignedWaiterName} can modify this order.` });
-      return null;
-    }
+  const handleSaveOrder = async (notify = true) => {
     if (cartItems.length === 0) {
       setStatusMessage({ type: 'error', text: 'Cannot save an empty order. Please add items.' });
       notify.warning('Add at least one item before saving the order.', `order-empty-${table.id}`);
@@ -219,27 +211,35 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
               <h2 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">Table {table.table_number}</h2>
               <Badge>{table.capacity} seats</Badge>
             </div>
-            <p className="truncate text-xs text-muted-foreground">
-              Assigned waiter: {activeOrder ? assignedWaiterName : (profile?.full_name || user?.email?.split('@')[0])}
+            <p className="text-[11px] text-slate-500">
+              Waiter: {profile?.full_name || user?.email?.split('@')[0]}
             </p>
           </div>
         </div>
-        <div className="hidden shrink-0 items-center gap-2 sm:flex">
-          <Button type="button" variant="secondary" size="sm" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)}>
-            <Save aria-hidden="true" className="h-4 w-4" /><span>{savingOrder ? 'Saving...' : 'Save order'}</span>
-          </Button>
-          <Button type="button" size="sm" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
-            <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Generate bill</span>
-          </Button>
-        </div>
-      </Card>
 
-      {isReadOnly && (
-        <div className="mb-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning-foreground" role="status">
-          <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>Read-only order — assigned to {assignedWaiterName}. You can view items, but only the assigned waiter can make changes or submit the final bill.</span>
+        {/* Action button in header */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={savingOrder || cartItems.length === 0}
+            onClick={() => handleSaveOrder(true)}
+            className="px-3.5 py-2 bg-[#FAF9F7] hover:bg-[#FAF9F7] text-[#2B2623] border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+          >
+            <Save className="w-3.5 h-3.5 text-[#C2570C]" />
+            <span className="hidden sm:inline">{savingOrder ? 'Saving...' : 'Save Order'}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={cartItems.length === 0}
+            onClick={handleOpenFinalBill}
+            className="px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
+          >
+            <ReceiptText className="w-3.5 h-3.5" />
+            <span>Generate Bill</span>
+          </button>
         </div>
-      )}
+      </div>
 
       {statusMessage.text && (
         <div className={`mb-4 flex items-start gap-2 rounded-md border p-3 text-sm ${statusMessage.type === 'error' ? 'border-danger/30 bg-danger-soft text-danger-foreground' : 'border-success/30 bg-success-soft text-success-foreground'}`} role="status">
@@ -290,35 +290,62 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                       {item.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{item.description}</p>}
                     </div>
 
-                    <div className="mt-4 flex min-h-11 items-center border-t border-border pt-3">
-                      {!item.is_available ? (
-                        <span className="text-sm font-medium text-muted-foreground">Unavailable</span>
-                      ) : qty === 0 ? (
-                        <Button type="button" variant="secondary" disabled={isReadOnly} onClick={() => handleAddItem(item)} className="w-full">
-                          <Plus aria-hidden="true" className="h-4 w-4" /><span>Add to order</span>
-                        </Button>
-                      ) : (
-                        <QuantityStepper
-                          value={qty}
-                          label={`${item.name} quantity`}
-                          disabled={isReadOnly}
-                          onDecrease={() => handleDecrement(item.id)}
-                          onIncrease={() => handleIncrement(item.id)}
-                        />
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                    {item.description && (
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-1">
+                        {item.description}
+                      </p>
+                    )}
+                  </div>
 
-        <Card className="flex min-w-0 flex-col overflow-hidden lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4">
-          <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <ShoppingBag aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
-              <h3 className="truncate font-bold text-foreground">Running order · {table.table_number}</h3>
+                  {/* Add / Quantity buttons */}
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                    {!item.is_available ? (
+                      <span className="text-xs font-semibold text-slate-400">Unavailable</span>
+                    ) : qty === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => handleAddItem(item)}
+                        className="w-full py-2 bg-[#FAF9F7] hover:bg-[#A8480A] text-[#2B2623] hover:text-white border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add to Order</span>
+                      </button>
+                    ) : (
+                      <div className="w-full flex items-center justify-between bg-emerald-50 rounded-xl p-1 border border-[#C2570C]/40">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrement(item.id)}
+                          className="w-8 h-8 rounded-lg bg-white text-[#14532D] hover:bg-slate-100 flex items-center justify-center shadow-xs active:scale-90 font-bold"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="font-bold text-sm text-[#14532D] px-2">
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleIncrement(item.id)}
+                          className="w-8 h-8 rounded-lg bg-[#C2570C] text-white hover:bg-[#A8480A] flex items-center justify-center shadow-xs active:scale-90 font-bold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right: Running Order Cart Drawer (Desktop sticky, Mobile collapsible) */}
+        <div className="lg:col-span-5 xl:col-span-4 bg-white border border-[#E8E4DE] rounded-xl shadow-sm overflow-hidden flex flex-col sticky top-20">
+          <div className="bg-[#FAF9F7] text-[#2B2623] border-b border-[#E8E4DE] px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="w-4 h-4 text-[#C2570C]" />
+              <h3 className="font-bold text-sm sm:text-base">
+                Running Order — Table {table.table_number}
+              </h3>
             </div>
             <Badge tone="primary" className="shrink-0">{totalItemCount} items</Badge>
           </div>
@@ -338,17 +365,34 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                           {formatINR(item.unit_price)} × {item.quantity} = <strong className="text-foreground">{formatINR(lineTotal)}</strong>
                         </p>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-2">
-                        <QuantityStepper
-                          value={item.quantity}
-                          label={`${item.item_name} quantity`}
-                          disabled={isReadOnly}
-                          onDecrease={() => handleDecrement(item.menu_item_id)}
-                          onIncrease={() => handleIncrement(item.menu_item_id)}
-                        />
-                        <Button type="button" variant="ghost" size="sm" disabled={isReadOnly} onClick={() => handleRemoveItem(item.menu_item_id)} aria-label={`Remove ${item.item_name}`} title="Remove item" className="min-h-10 text-danger-foreground">
-                          <Trash2 aria-hidden="true" className="h-4 w-4" /><span>Remove</span>
-                        </Button>
+
+                      {/* Quantity Controls */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrement(item.menu_item_id)}
+                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-6 text-center text-xs font-bold text-[#2B2623]">
+                          {item.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleIncrement(item.menu_item_id)}
+                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(item.menu_item_id)}
+                          className="w-7 h-7 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center ml-1"
+                          title="Remove item"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -366,12 +410,25 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
               <p className="shrink-0 text-xl font-bold text-primary">{formatINR(grandTotal)}</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="secondary" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)}>
-                <Save aria-hidden="true" className="h-4 w-4" /><span>{savingOrder ? 'Saving...' : 'Save order'}</span>
-              </Button>
-              <Button type="button" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
-                <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Final bill</span>
-              </Button>
+              <button
+                type="button"
+                disabled={savingOrder || cartItems.length === 0}
+                onClick={() => handleSaveOrder(true)}
+                className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-[#E8E4DE] text-[#2B2623] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
+              >
+                <Save className="w-3.5 h-3.5 text-[#C2570C]" />
+                <span>{savingOrder ? 'Saving...' : 'Save Order'}</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={cartItems.length === 0}
+                onClick={handleOpenFinalBill}
+                className="py-2.5 px-3 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
+              >
+                <ReceiptText className="w-3.5 h-3.5" />
+                <span>Final Bill</span>
+              </button>
             </div>
           </div>
         </Card>
@@ -383,13 +440,27 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
             <p className="truncate text-xs font-semibold text-muted-foreground">Table {table.table_number} · {totalItemCount} items</p>
             <p className="text-lg font-bold text-primary">{formatINR(grandTotal)}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)} aria-label={savingOrder ? 'Saving order' : 'Save order'}>
-              <Save aria-hidden="true" className="h-4 w-4" /><span className="hidden min-[380px]:inline">Save</span>
-            </Button>
-            <Button type="button" size="sm" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
-              <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Final bill</span>
-            </Button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={savingOrder || cartItems.length === 0}
+              onClick={() => handleSaveOrder(true)}
+              className="py-2 px-3 bg-[#FAF9F7] text-[#2B2623] rounded-xl text-xs font-bold shadow-xs active:scale-95 disabled:opacity-40 flex items-center gap-1"
+            >
+              <Save className="w-3 h-3 text-[#C2570C]" />
+              <span>Save</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={cartItems.length === 0}
+              onClick={handleOpenFinalBill}
+              className="py-2 px-4 bg-emerald-500 hover:bg-emerald-600 text-[#2B2623] font-bold rounded-xl text-xs shadow-sm active:scale-95 disabled:opacity-40 flex items-center gap-1"
+            >
+              <ReceiptText className="w-3.5 h-3.5" />
+              <span>Final Bill</span>
+            </button>
           </div>
         </div>
       </div>
