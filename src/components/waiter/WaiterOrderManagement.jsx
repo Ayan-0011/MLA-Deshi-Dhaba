@@ -4,11 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import { formatINR } from '../../lib/supabase';
 import { FinalBillModal } from './FinalBillModal';
 import { 
-  Armchair, 
   ArrowLeft, 
   Search, 
   Plus, 
-  Minus, 
   Trash2, 
   Save, 
   ReceiptText, 
@@ -16,9 +14,10 @@ import {
   AlertCircle, 
   UtensilsCrossed, 
   ShoppingBag,
-  ChevronUp,
-  ChevronDown
+  LockKeyhole
 } from 'lucide-react';
+import { notify } from '../../lib/notifications';
+import { Badge, Button, Card, EmptyState, QuantityStepper, Tabs } from '../ui';
 
 export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   const { user, profile } = useAuth();
@@ -30,6 +29,10 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
       (o) => o.table_id === table.id && (o.status === 'active' || o.status === 'correction')
     );
   }, [orders, table.id]);
+  const isReadOnly = Boolean(activeOrder && activeOrder.waiter_id !== user?.id);
+  const assignedWaiterName = activeOrder?.profiles?.full_name ||
+    (activeOrder?.waiter_id === user?.id ? profile?.full_name : null) ||
+    'Assigned waiter';
 
   // Local cart state for live manipulation
   const [cartItems, setCartItems] = useState([]);
@@ -77,7 +80,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Cart operations
   const handleAddItem = (menuItem) => {
-    if (!menuItem.is_available) return;
+    if (isReadOnly || !menuItem.is_available) return;
 
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((i) => i.menu_item_id === menuItem.id);
@@ -103,12 +106,14 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   };
 
   const handleIncrement = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) =>
       prev.map((i) => (i.menu_item_id === menuItemId ? { ...i, quantity: i.quantity + 1 } : i))
     );
   };
 
   const handleDecrement = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) =>
       prev
         .map((i) => (i.menu_item_id === menuItemId ? { ...i, quantity: i.quantity - 1 } : i))
@@ -117,13 +122,19 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   };
 
   const handleRemoveItem = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) => prev.filter((i) => i.menu_item_id !== menuItemId));
   };
 
   // Save order to Supabase
-  const handleSaveOrder = async (notify = true) => {
+  const handleSaveOrder = async (showSuccessToast = true) => {
+    if (isReadOnly) {
+      setStatusMessage({ type: 'error', text: `Only ${assignedWaiterName} can modify this order.` });
+      return null;
+    }
     if (cartItems.length === 0) {
       setStatusMessage({ type: 'error', text: 'Cannot save an empty order. Please add items.' });
+      notify.warning('Add at least one item before saving the order.', `order-empty-${table.id}`);
       return null;
     }
 
@@ -131,12 +142,18 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
     setStatusMessage({ type: '', text: '' });
     try {
       const orderId = await saveRunningOrder(table.id, user.id, cartItems, notes);
-      if (notify) {
+      if (showSuccessToast) {
         setStatusMessage({ type: 'success', text: `Order for ${table.table_number} saved in database!` });
+        notify.success(`Order for ${table.table_number} saved.`, `order-saved-${table.id}`);
       }
       return orderId;
     } catch (err) {
-      setStatusMessage({ type: 'error', text: err.message || 'Failed to save order' });
+      console.error('Order save failed:', err);
+      const message = err.message?.includes('assigned to another waiter')
+        ? `This order is assigned to ${assignedWaiterName} and is read-only for you.`
+        : 'Could not save this order. Please refresh and try again.';
+      setStatusMessage({ type: 'error', text: message });
+      notify.error(message, `order-save-error-${table.id}`);
       return null;
     } finally {
       setSavingOrder(false);
@@ -145,8 +162,10 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Open Final Bill Modal
   const handleOpenFinalBill = async () => {
+    if (isReadOnly) return;
     if (cartItems.length === 0) {
       setStatusMessage({ type: 'error', text: 'Please add items before generating a bill.' });
+      notify.warning('Add at least one item before generating a bill.', `bill-empty-${table.id}`);
       return;
     }
     // First save the latest order to database
@@ -158,16 +177,23 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Confirm final bill submission to admin
   const handleConfirmFinalBill = async () => {
+    if (isReadOnly) return;
     setIsSubmittingBill(true);
     try {
       const orderIdToBill = activeOrder?.id || (await handleSaveOrder(false));
       if (!orderIdToBill) throw new Error('Could not verify order');
 
       await generateFinalBill(orderIdToBill, user.id);
+      notify.success('Final bill sent for admin approval.', `bill-submitted-${orderIdToBill}`);
       setShowBillModal(false);
       if (onBillSubmitted) onBillSubmitted();
     } catch (err) {
-      setStatusMessage({ type: 'error', text: err.message || 'Bill submission failed' });
+      console.error('Final bill submission failed:', err);
+      const message = err.message?.includes('assigned to another waiter')
+        ? `Only ${assignedWaiterName} can submit this bill.`
+        : 'Could not submit the bill. Please try again.';
+      setStatusMessage({ type: 'error', text: message });
+      notify.error(message, `bill-submit-error-${table.id}`);
     } finally {
       setIsSubmittingBill(false);
     }
@@ -182,259 +208,147 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 pb-32">
-      {/* Top Header Bar */}
-      <div className="bg-white border border-[#E8E4DE] rounded-xl p-4 shadow-sm flex items-center justify-between gap-3 mb-4 sticky top-14 z-30">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 rounded-xl bg-[#FAF9F7] hover:bg-[#FAF9F7] text-[#2B2623] transition-colors"
-            title="Back to tables"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg sm:text-xl font-bold text-[#2B2623]">
-                Table {table.table_number}
-              </h2>
-              <span className="text-xs bg-[#FAF9F7] text-[#6B635C] px-2 py-0.5 rounded-md font-bold">
-                {table.capacity} Seats
-              </span>
+    <div className="mx-auto max-w-7xl px-3 py-4 pb-40 sm:px-6 lg:pb-8">
+      <Card className="sticky top-14 z-30 mb-4 flex items-center justify-between gap-2 p-3 sm:gap-4 sm:p-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <Button type="button" variant="secondary" size="sm" onClick={onBack} aria-label="Back to tables" title="Back to tables" className="shrink-0 px-2">
+            <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+          </Button>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-bold tracking-tight text-foreground sm:text-xl">Table {table.table_number}</h2>
+              <Badge>{table.capacity} seats</Badge>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Waiter: {profile?.full_name || user?.email?.split('@')[0]}
+            <p className="truncate text-xs text-muted-foreground">
+              Assigned waiter: {activeOrder ? assignedWaiterName : (profile?.full_name || user?.email?.split('@')[0])}
             </p>
           </div>
         </div>
-
-        {/* Action button in header */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={savingOrder || cartItems.length === 0}
-            onClick={() => handleSaveOrder(true)}
-            className="px-3.5 py-2 bg-[#FAF9F7] hover:bg-[#FAF9F7] text-[#2B2623] border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
-          >
-            <Save className="w-3.5 h-3.5 text-[#C2570C]" />
-            <span className="hidden sm:inline">{savingOrder ? 'Saving...' : 'Save Order'}</span>
-          </button>
-
-          <button
-            type="button"
-            disabled={cartItems.length === 0}
-            onClick={handleOpenFinalBill}
-            className="px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
-          >
-            <ReceiptText className="w-3.5 h-3.5" />
-            <span>Generate Bill</span>
-          </button>
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          <Button type="button" variant="secondary" size="sm" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)}>
+            <Save aria-hidden="true" className="h-4 w-4" /><span>{savingOrder ? 'Saving...' : 'Save order'}</span>
+          </Button>
+          <Button type="button" size="sm" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
+            <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Generate bill</span>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      {/* Notifications */}
+      {isReadOnly && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning-foreground" role="status">
+          <LockKeyhole aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Read-only order — assigned to {assignedWaiterName}. You can view items, but only the assigned waiter can make changes or submit the final bill.</span>
+        </div>
+      )}
+
       {statusMessage.text && (
-        <div className={`mb-4 p-3 rounded-xl text-xs flex items-center gap-2 ${
-          statusMessage.type === 'error' ? 'bg-red-100 text-red-800 border border-red-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-        }`}>
-          {statusMessage.type === 'error' ? <AlertCircle className="w-4 h-4 shrink-0" /> : <Check className="w-4 h-4 shrink-0" />}
+        <div className={`mb-4 flex items-start gap-2 rounded-md border p-3 text-sm ${statusMessage.type === 'error' ? 'border-danger/30 bg-danger-soft text-danger-foreground' : 'border-success/30 bg-success-soft text-success-foreground'}`} role="status">
+          {statusMessage.type === 'error' ? <AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /> : <Check aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />}
           <span>{statusMessage.text}</span>
         </div>
       )}
 
-      {/* Main Split Layout: Left Menu, Right Cart (Desktop) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Food Menu Selection */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-          {/* Search & Category Filter */}
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-[#6B635C] absolute left-3.5 top-3" />
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-12 lg:gap-6">
+        <section className="min-w-0 space-y-4 lg:col-span-7 xl:col-span-8" aria-label="Food menu">
+          <div className="space-y-3">
+            <label className="relative block">
+              <span className="sr-only">Search menu items</span>
+              <Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
-                type="text"
+                type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search food items (Roti, Dal, Paneer, Chai...)"
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                placeholder="Search food items"
+                className="min-h-11 w-full rounded-md border border-border bg-surface pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15"
               />
-            </div>
-
-            {/* Category tabs */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                type="button"
-                onClick={() => setSelectedCategory('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
-                  selectedCategory === 'all'
-                    ? 'bg-[#C2570C] text-white shadow-xs'
-                    : 'bg-white text-[#2B2623] border border-[#E8E4DE] hover:bg-[#FAF9F7]'
-                }`}
-              >
-                All Menu
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
-                    selectedCategory === cat.id
-                      ? 'bg-[#C2570C] text-white shadow-xs'
-                      : 'bg-white text-[#2B2623] border border-[#E8E4DE] hover:bg-[#FAF9F7]'
-                  }`}
-                >
-                  {cat.name}
-                </button>
-              ))}
-            </div>
+            </label>
+            <Tabs
+              value={selectedCategory}
+              onChange={setSelectedCategory}
+              items={[{ value: 'all', label: 'All menu' }, ...categories.map((cat) => ({ value: cat.id, label: cat.name }))]}
+            />
           </div>
 
-          {/* Menu Items Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {filteredMenuItems.map((item) => {
-              const cartItem = cartItems.find((i) => i.menu_item_id === item.id);
-              const qty = cartItem ? cartItem.quantity : 0;
+          {filteredMenuItems.length === 0 ? (
+            <EmptyState icon={UtensilsCrossed} title="No menu items found" description="Try another category or search term." />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2">
+              {filteredMenuItems.map((item) => {
+                const cartItem = cartItems.find((i) => i.menu_item_id === item.id);
+                const qty = cartItem ? cartItem.quantity : 0;
 
-              return (
-                <div
-                  key={item.id}
-                  className={`bg-white border rounded-xl p-3.5 flex flex-col justify-between transition-all ${
-                    !item.is_available 
-                      ? 'border-slate-200 opacity-50 bg-slate-50' 
-                      : qty > 0 
-                      ? 'border-[#C2570C]/40 ring-2 ring-[#C2570C]/20 shadow-xs' 
-                      : 'border-[#E8E4DE] hover:border-[#D6CFC6] shadow-xs'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="font-bold text-sm sm:text-base text-[#2B2623]">
-                          {item.name}
-                        </h4>
-                        <span className="text-[10px] font-semibold text-[#C2570C] bg-[#FAF9F7] px-1.5 py-0.5 rounded">
-                          {item.menu_categories?.name || 'Item'}
-                        </span>
+                return (
+                  <Card key={item.id} className={`flex min-w-0 flex-col justify-between p-4 transition-shadow hover:shadow-md ${!item.is_available ? 'opacity-60' : qty > 0 ? 'border-primary/50 ring-1 ring-primary/15' : ''}`}>
+                    <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="wrap-break-word font-bold text-foreground">{item.name}</h3>
+                          <Badge tone="neutral" className="mt-1">{item.menu_categories?.name || 'Item'}</Badge>
+                        </div>
+                        <span className="shrink-0 text-base font-bold text-primary">{formatINR(item.price)}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-base font-bold text-[#14532D]">
-                          {formatINR(item.price)}
-                        </span>
-                      </div>
+                      {item.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{item.description}</p>}
                     </div>
 
-                    {item.description && (
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-1">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Add / Quantity buttons */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
-                    {!item.is_available ? (
-                      <span className="text-xs font-semibold text-slate-400">Unavailable</span>
-                    ) : qty === 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => handleAddItem(item)}
-                        className="w-full py-2 bg-[#FAF9F7] hover:bg-[#A8480A] text-[#2B2623] hover:text-white border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add to Order</span>
-                      </button>
-                    ) : (
-                      <div className="w-full flex items-center justify-between bg-emerald-50 rounded-xl p-1 border border-[#C2570C]/40">
-                        <button
-                          type="button"
-                          onClick={() => handleDecrement(item.id)}
-                          className="w-8 h-8 rounded-lg bg-white text-[#14532D] hover:bg-slate-100 flex items-center justify-center shadow-xs active:scale-90 font-bold"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="font-bold text-sm text-[#14532D] px-2">
-                          {qty}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleIncrement(item.id)}
-                          className="w-8 h-8 rounded-lg bg-[#C2570C] text-white hover:bg-[#A8480A] flex items-center justify-center shadow-xs active:scale-90 font-bold"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right: Running Order Cart Drawer (Desktop sticky, Mobile collapsible) */}
-        <div className="lg:col-span-5 xl:col-span-4 bg-white border border-[#E8E4DE] rounded-xl shadow-sm overflow-hidden flex flex-col sticky top-20">
-          <div className="bg-[#FAF9F7] text-[#2B2623] border-b border-[#E8E4DE] px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4 text-[#C2570C]" />
-              <h3 className="font-bold text-sm sm:text-base">
-                Running Order — Table {table.table_number}
-              </h3>
+                    <div className="mt-4 flex min-h-11 items-center border-t border-border pt-3">
+                      {!item.is_available ? (
+                        <span className="text-sm font-medium text-muted-foreground">Unavailable</span>
+                      ) : qty === 0 ? (
+                        <Button type="button" variant="secondary" disabled={isReadOnly} onClick={() => handleAddItem(item)} className="w-full">
+                          <Plus aria-hidden="true" className="h-4 w-4" /><span>Add to order</span>
+                        </Button>
+                      ) : (
+                        <QuantityStepper
+                          value={qty}
+                          label={`${item.name} quantity`}
+                          disabled={isReadOnly}
+                          onDecrease={() => handleDecrement(item.id)}
+                          onIncrease={() => handleIncrement(item.id)}
+                        />
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
-            <span className="text-xs font-mono font-bold bg-[#C2570C] text-white px-2 py-0.5 rounded-full">
-              {totalItemCount} items
-            </span>
+          )}
+        </section>
+
+        <Card className="flex min-w-0 flex-col overflow-hidden lg:sticky lg:top-20 lg:col-span-5 xl:col-span-4">
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <ShoppingBag aria-hidden="true" className="h-4 w-4 shrink-0 text-primary" />
+              <h3 className="truncate font-bold text-foreground">Running order · {table.table_number}</h3>
+            </div>
+            <Badge tone="primary" className="shrink-0">{totalItemCount} items</Badge>
           </div>
 
-          <div className="p-4 flex-1 flex flex-col justify-between max-h-[60vh] overflow-y-auto">
+          <div className="max-h-[45vh] min-h-28 flex-1 overflow-y-auto p-4 lg:max-h-[55vh]">
             {cartItems.length === 0 ? (
-              <div className="py-12 text-center text-slate-400">
-                <UtensilsCrossed className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                <p className="text-xs font-semibold text-[#2B2623]">Order is empty</p>
-                <p className="text-[11px] text-slate-500">Tap items from the food menu to add them to this table's running order.</p>
-              </div>
+              <EmptyState icon={UtensilsCrossed} title="Order is empty" description="Choose items from the menu to start this table's running order." />
             ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-border">
                 {cartItems.map((item) => {
                   const lineTotal = Number(item.unit_price) * Number(item.quantity);
-
                   return (
-                    <div key={item.menu_item_id} className="py-3 flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h5 className="font-bold text-xs sm:text-sm text-[#2B2623] truncate">
-                          {item.item_name}
-                        </h5>
-                        <div className="text-[11px] text-slate-500">
-                          {formatINR(item.unit_price)} × {item.quantity} = <strong className="text-[#14532D]">{formatINR(lineTotal)}</strong>
-                        </div>
+                    <div key={item.menu_item_id} className="flex items-start justify-between gap-3 py-3">
+                      <div className="min-w-0 flex-1">
+                        <h4 className="wrap-break-word text-sm font-semibold text-foreground">{item.item_name}</h4>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {formatINR(item.unit_price)} × {item.quantity} = <strong className="text-foreground">{formatINR(lineTotal)}</strong>
+                        </p>
                       </div>
-
-                      {/* Quantity Controls */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleDecrement(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="w-6 text-center text-xs font-bold text-[#2B2623]">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleIncrement(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveItem(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center ml-1"
-                          title="Remove item"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <QuantityStepper
+                          value={item.quantity}
+                          label={`${item.item_name} quantity`}
+                          disabled={isReadOnly}
+                          onDecrease={() => handleDecrement(item.menu_item_id)}
+                          onIncrease={() => handleIncrement(item.menu_item_id)}
+                        />
+                        <Button type="button" variant="ghost" size="sm" disabled={isReadOnly} onClick={() => handleRemoveItem(item.menu_item_id)} aria-label={`Remove ${item.item_name}`} title="Remove item" className="min-h-10 text-danger-foreground">
+                          <Trash2 aria-hidden="true" className="h-4 w-4" /><span>Remove</span>
+                        </Button>
                       </div>
                     </div>
                   );
@@ -443,84 +357,43 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
             )}
           </div>
 
-          {/* Cart Grand Total & Actions */}
-          <div className="p-4 bg-[#FAF9F7] border-t border-[#E8E4DE] space-y-3">
-            <div className="flex justify-between items-center">
-              <div>
-                <span className="text-xs font-bold text-[#6B635C] uppercase tracking-wider block">
-                  Running Grand Total
-                </span>
-                <span className="text-[11px] text-slate-500">
-                  Auto-calculated from items & quantities
-                </span>
+          <div className="space-y-3 border-t border-border bg-surface-muted p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-foreground">Running total</p>
+                <p className="text-xs text-muted-foreground">Calculated from items and quantities</p>
               </div>
-              <span className="text-2xl font-bold text-[#14532D]">
-                {formatINR(grandTotal)}
-              </span>
+              <p className="shrink-0 text-xl font-bold text-primary">{formatINR(grandTotal)}</p>
             </div>
-
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={savingOrder || cartItems.length === 0}
-                onClick={() => handleSaveOrder(true)}
-                className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-[#E8E4DE] text-[#2B2623] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
-              >
-                <Save className="w-3.5 h-3.5 text-[#C2570C]" />
-                <span>{savingOrder ? 'Saving...' : 'Save Order'}</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={cartItems.length === 0}
-                onClick={handleOpenFinalBill}
-                className="py-2.5 px-3 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
-              >
-                <ReceiptText className="w-3.5 h-3.5" />
-                <span>Final Bill</span>
-              </button>
+              <Button type="button" variant="secondary" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)}>
+                <Save aria-hidden="true" className="h-4 w-4" /><span>{savingOrder ? 'Saving...' : 'Save order'}</span>
+              </Button>
+              <Button type="button" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
+                <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Final bill</span>
+              </Button>
             </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 px-3 pt-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-lg backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold text-muted-foreground">Table {table.table_number} · {totalItemCount} items</p>
+            <p className="text-lg font-bold text-primary">{formatINR(grandTotal)}</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button type="button" variant="secondary" size="sm" disabled={isReadOnly || savingOrder || cartItems.length === 0} onClick={() => handleSaveOrder(true)} aria-label={savingOrder ? 'Saving order' : 'Save order'}>
+              <Save aria-hidden="true" className="h-4 w-4" /><span className="hidden min-[380px]:inline">Save</span>
+            </Button>
+            <Button type="button" size="sm" disabled={isReadOnly || cartItems.length === 0} onClick={handleOpenFinalBill}>
+              <ReceiptText aria-hidden="true" className="h-4 w-4" /><span>Final bill</span>
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Sticky Bottom Bar (Always clearly visible with running total!) */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white text-[#2B2623] border-t border-[#E8E4DE] p-3 shadow-sm">
-        <div className="max-w-md mx-auto flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] text-[#6B635C] uppercase tracking-wider font-bold">
-              Table {table.table_number} • {totalItemCount} Items
-            </div>
-            <div className="text-xl font-bold text-emerald-600">
-              {formatINR(grandTotal)}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={savingOrder || cartItems.length === 0}
-              onClick={() => handleSaveOrder(true)}
-              className="py-2 px-3 bg-[#FAF9F7] text-[#2B2623] rounded-xl text-xs font-bold shadow-xs active:scale-95 disabled:opacity-40 flex items-center gap-1"
-            >
-              <Save className="w-3 h-3 text-[#C2570C]" />
-              <span>Save</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={cartItems.length === 0}
-              onClick={handleOpenFinalBill}
-              className="py-2 px-4 bg-emerald-500 hover:bg-emerald-600 text-[#2B2623] font-bold rounded-xl text-xs shadow-sm active:scale-95 disabled:opacity-40 flex items-center gap-1"
-            >
-              <ReceiptText className="w-3.5 h-3.5" />
-              <span>Final Bill</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Final Bill Review & Submission Modal */}
       {showBillModal && (
         <FinalBillModal
           order={{ items: cartItems, notes }}

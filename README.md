@@ -105,7 +105,13 @@ npm install
    ```
    supabase/seed.sql
    ```
-5. Copy your **Project URL** and **Anon Public Key**.
+5. Run the migrations in order from the Supabase SQL Editor:
+   - `supabase/migrations/002_security_hardening.sql`
+   - `supabase/migrations/003_waiter_assignment_locking.sql`
+   The second migration enforces waiter ownership in database RPCs/RLS, serializes
+   order creation and reassignment, and adds admin waiter reassignment. Do not rely
+   on the UI alone for these permissions.
+6. Copy your **Project URL** and **Anon Public Key**.
 
 ### 3. Environment Setup
 Create a `.env` file in the root directory:

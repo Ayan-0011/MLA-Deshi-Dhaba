@@ -24,13 +24,15 @@ import { WaiterSubmittedBills } from './components/waiter/WaiterSubmittedBills';
 import { RefreshCw } from 'lucide-react';
 
 const LoadingScreen = () => (
-  <div className="min-h-screen bg-[#FAF9F7] flex flex-col items-center justify-center p-4">
-    <img src={`${import.meta.env.BASE_URL}logo.webp`} alt="MLA Desi Dhaba" className="w-20 h-20 rounded-full object-cover mb-3" />
-    <h2 className="text-base font-semibold text-[#2B2623]">MLA Desi Dhaba</h2>
-    <div className="flex items-center gap-2 text-xs text-[#6B635C] mt-2">
-      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-      <span>Loading…</span>
-    </div>
+  <div className="min-h-dvh bg-background text-foreground flex items-center justify-center p-4">
+    <section role="status" aria-live="polite" className="w-full max-w-sm rounded-2xl border border-border bg-surface px-6 py-8 shadow-md flex flex-col items-center text-center">
+      <img src={`${import.meta.env.BASE_URL}logo.webp`} alt="MLA Desi Dhaba" className="w-20 h-20 rounded-full object-cover mb-4 ring-4 ring-primary-soft" />
+      <h2 className="text-base font-semibold text-foreground">MLA Desi Dhaba</h2>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-3">
+        <RefreshCw className="w-4 h-4 animate-spin text-primary" />
+        <span>Loading…</span>
+      </div>
+    </section>
   </div>
 );
 
@@ -127,7 +129,10 @@ const WaiterApp = ({ path, navigate }) => {
         />
       )}
       {orderMatch && !orderTable && (
-        <div className="p-6 text-sm text-[#6B635C]">Table not found. Please pick a table from the list.</div>
+        <section role="status" className="mx-4 mt-4 rounded-xl border border-border bg-surface p-5 text-sm text-muted-foreground shadow-sm sm:mx-6 sm:mt-6 sm:p-6">
+          <h2 className="text-base font-semibold text-foreground">Table unavailable</h2>
+          <p className="mt-1">Table not found. Please pick a table from the list.</p>
+        </section>
       )}
 
       {active.id === 'waiter-submitted-bills' && (

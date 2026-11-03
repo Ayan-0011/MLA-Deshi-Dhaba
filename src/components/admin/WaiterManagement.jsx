@@ -8,11 +8,12 @@ import {
   X, 
   AlertCircle, 
   ShieldCheck, 
-  Power, 
   Mail, 
   User, 
-  Lock 
+  Lock
 } from 'lucide-react';
+import { ToggleSwitch } from '../common/ToggleSwitch';
+import { notify } from '../../lib/notifications';
 
 export const WaiterManagement = () => {
   const [waiters, setWaiters] = useState([]);
@@ -23,6 +24,7 @@ export const WaiterManagement = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [updatingWaiterId, setUpdatingWaiterId] = useState(null);
 
   const fetchWaiters = useCallback(async () => {
     try {
@@ -36,7 +38,8 @@ export const WaiterManagement = () => {
       setWaiters(data || []);
     } catch (err) {
       console.error('Failed to fetch waiters:', err);
-      setError(err.message);
+      setError('Could not load staff accounts. Please refresh and try again.');
+      notify.error('Could not load staff accounts. Please refresh and try again.', 'waiter-fetch-error');
     } finally {
       setLoading(false);
     }
@@ -53,6 +56,7 @@ export const WaiterManagement = () => {
 
     if (!email.trim() || !password || !name.trim()) {
       setError('Name, email, and password are required');
+      notify.warning('Name, email and password are required.', 'waiter-create-validation');
       return;
     }
 
@@ -88,17 +92,21 @@ export const WaiterManagement = () => {
       }
 
       setSuccess(`Waiter account for "${name.trim()}" created successfully!`);
+      notify.success('Waiter account created.', 'waiter-created');
       setName('');
       setEmail('');
       setPassword('');
       setIsAdding(false);
       await fetchWaiters();
     } catch (err) {
-      setError(err.message || 'Failed to create waiter account');
+      console.error('Waiter account creation failed:', err);
+      setError('Could not create this account. Check the details and try again.');
+      notify.error('Could not create this waiter account.', 'waiter-create-error');
     }
   };
 
   const handleToggleActive = async (waiter) => {
+    setUpdatingWaiterId(waiter.id);
     setError('');
     setSuccess('');
     try {
@@ -110,29 +118,34 @@ export const WaiterManagement = () => {
       if (updateErr) throw updateErr;
 
       setSuccess(`Waiter ${waiter.full_name} status updated.`);
+      notify.success(`${waiter.full_name} is now ${waiter.is_active ? 'inactive' : 'active'}.`, `waiter-status-${waiter.id}`);
       await fetchWaiters();
     } catch (err) {
-      setError(err.message || 'Failed to update waiter');
+      console.error('Waiter status update failed:', err);
+      setError('Could not update this account. Please try again.');
+      notify.error('Could not update this waiter account.', `waiter-status-error-${waiter.id}`);
+    } finally {
+      setUpdatingWaiterId(null);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-5 px-3 py-4 text-foreground sm:px-6 sm:py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
         <div>
-          <h2 className="text-xl sm:text-xl font-bold text-[#2B2623] flex items-center gap-2">
-            <Users className="w-6 h-6 text-[#C2570C]" />
+          <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <Users className="h-6 w-6 text-primary" />
             <span>Dhaba Staff & Waiter Accounts</span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#6B635C] mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage authorized staff members who can take table orders and submit bills.
           </p>
         </div>
 
         <button
           onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 shrink-0"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
         >
           {isAdding ? <X className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
           <span>{isAdding ? 'Cancel' : 'Register New Waiter'}</span>
@@ -140,13 +153,13 @@ export const WaiterManagement = () => {
       </div>
 
       {error && (
-        <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-foreground">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {success && (
-        <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft p-3 text-sm text-success-foreground">
           <Check className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
@@ -154,53 +167,53 @@ export const WaiterManagement = () => {
 
       {/* Add Waiter Form */}
       {isAdding && (
-        <form onSubmit={handleCreateWaiter} className="bg-[#FAF9F7] border-2 border-[#C2570C]/40 rounded-xl p-5 shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-[#2B2623]">Register Waiter Account</h3>
+        <form onSubmit={handleCreateWaiter} className="space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <h3 className="text-sm font-bold text-foreground">Register Waiter Account</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Full Name *
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-[#6B635C] absolute left-3 top-3" />
+                <User className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Shyamu"
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                  className="min-h-11 w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                   required
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Email Address *
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-[#6B635C] absolute left-3 top-3" />
+                <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="shyamu@mladhaba.com"
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                  className="min-h-11 w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                   required
                 />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Initial Password *
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-[#6B635C] absolute left-3 top-3" />
+                <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                  className="min-h-11 w-full rounded-md border border-border bg-surface py-2.5 pl-9 pr-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                   required
                 />
               </div>
@@ -210,13 +223,13 @@ export const WaiterManagement = () => {
             <button
               type="button"
               onClick={() => setIsAdding(false)}
-              className="px-4 py-2 bg-white text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold border border-slate-300"
+              className="min-h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-foreground hover:bg-surface-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold shadow-sm active:scale-95"
+              className="min-h-10 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
             >
               Create Waiter Account
             </button>
@@ -225,51 +238,43 @@ export const WaiterManagement = () => {
       )}
 
       {/* Staff List */}
-      <div className="bg-white border border-[#E8E4DE] rounded-xl shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 bg-[#FAF9F7] border-b border-[#E8E4DE] flex items-center justify-between">
-          <span className="text-xs font-bold text-[#2B2623]">Registered System Users</span>
-          <span className="text-xs text-slate-500">{waiters.length} profiles</span>
+      <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+        <div className="flex items-center justify-between border-b border-border bg-surface-muted px-4 py-3.5 sm:px-5">
+          <span className="text-sm font-bold text-foreground">Registered System Users</span>
+          <span className="text-xs text-muted-foreground">{waiters.length} profiles</span>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-border">
           {waiters.map((w) => (
-            <div key={w.id} className="p-4 flex items-center justify-between hover:bg-[#FAF9F7] transition-colors">
+            <div key={w.id} className="flex flex-col gap-3 p-4 transition-colors hover:bg-surface-muted sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
-                  w.role === 'admin' ? 'bg-[#C2570C]/20 text-[#C2570C]' : 'bg-emerald-50 text-[#14532D]'
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg font-bold text-sm ${
+                  w.role === 'admin' ? 'bg-primary-soft text-primary' : 'bg-success-soft text-success-foreground'
                 }`}>
                   {w.full_name?.charAt(0) || 'U'}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-[#2B2623]">{w.full_name}</span>
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                      w.role === 'admin' ? 'bg-[#C2570C] text-white' : 'bg-[#C2570C] text-white'
-                    }`}>
+                    <span className="font-bold text-sm text-foreground">{w.full_name}</span>
+                    <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                    
                       {w.role}
                     </span>
                     {!w.is_active && (
-                      <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">
+                      <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[10px] font-bold text-danger-foreground">
                         Inactive
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">{w.email}</div>
+                  <div className="mt-0.5 text-sm text-muted-foreground">{w.email}</div>
                 </div>
               </div>
 
               {w.role === 'waiter' && (
-                <button
-                  onClick={() => handleToggleActive(w)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                    w.is_active 
-                      ? 'border-red-200 text-red-700 hover:bg-red-50' 
-                      : 'border-emerald-300 text-emerald-700 hover:bg-emerald-50'
-                  }`}
-                >
-                  <Power className="w-3.5 h-3.5" />
-                  <span>{w.is_active ? 'Deactivate' : 'Activate'}</span>
-                </button>
+                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                  <span>{w.is_active ? 'Active' : 'Inactive'}</span>
+                  <ToggleSwitch checked={w.is_active} loading={updatingWaiterId === w.id} onChange={() => handleToggleActive(w)} label={`${w.full_name} account status`} />
+                </div>
               )}
             </div>
           ))}

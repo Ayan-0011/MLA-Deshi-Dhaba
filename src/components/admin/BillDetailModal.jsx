@@ -2,7 +2,7 @@ import React from 'react';
 import { formatINR } from '../../lib/supabase';
 import { ReceiptText, X, CheckCircle, XCircle, Clock, Calendar, User, Armchair, Printer } from 'lucide-react';
 
-export const BillDetailModal = ({ bill, onClose, onApprove, onReject }) => {
+export const BillDetailModal = ({ bill, onClose }) => {
   if (!bill) return null;
 
   const isPending = bill.status === 'pending_approval';
@@ -14,28 +14,32 @@ export const BillDetailModal = ({ bill, onClose, onApprove, onReject }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 ">
-      <div className="bg-[#FAF9F7] border border-[#E8E4DE] rounded-xl w-full max-w-lg shadow-sm overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/45 sm:items-center sm:p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="bill-detail-title" className="flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-xl border border-border bg-surface shadow-lg sm:max-w-lg sm:rounded-xl">
         {/* Header */}
-        <div className="bg-[#FAF9F7] text-[#2B2623] border-b border-[#E8E4DE] px-5 py-4 flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-border bg-surface-muted px-4 py-4 text-foreground sm:px-5">
           <div className="flex items-center gap-2">
-            <ReceiptText className="w-5 h-5 text-[#C2570C]" />
+            <ReceiptText className="h-5 w-5 text-primary" />
             <div>
-              <h3 className="font-bold text-base sm:text-lg">MLA Desi Dhaba</h3>
-              <p className="text-[11px] text-[#6B635C] font-mono">Bill #{bill.bill_number}</p>
+              <h3 id="bill-detail-title" className="text-base font-bold sm:text-lg">MLA Desi Dhaba</h3>
+              <p className="font-mono text-xs text-muted-foreground">Bill #{bill.bill_number}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handlePrint}
-              className="p-1.5 rounded-lg bg-white border border-[#E8E4DE] hover:bg-[#FAF9F7] text-[#2B2623] transition-colors"
+              className="grid min-h-10 min-w-10 place-items-center rounded-md border border-border bg-surface text-foreground hover:bg-surface-muted"
               title="Print Receipt"
+              aria-label="Print receipt"
             >
               <Printer className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-[#6B635C] hover:text-[#2B2623] transition-colors"
+              className="grid min-h-10 min-w-10 place-items-center rounded-md text-muted-foreground hover:bg-surface hover:text-foreground"
+              aria-label="Close bill details"
             >
               <X className="w-5 h-5" />
             </button>
@@ -43,31 +47,31 @@ export const BillDetailModal = ({ bill, onClose, onApprove, onReject }) => {
         </div>
 
         {/* Scrollable Bill Receipt Body */}
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="space-y-4 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-5">
           {/* Metadata Cards */}
-          <div className="bg-white border border-[#E8E4DE] rounded-xl p-3 grid grid-cols-2 gap-2 text-xs">
+          <div className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-3 text-sm min-[420px]:grid-cols-2">
             <div>
-              <span className="text-[#6B635C] font-semibold block">Table</span>
-              <span className="font-bold text-sm text-[#2B2623]">
+              <span className="block text-xs font-semibold text-muted-foreground">Table</span>
+              <span className="text-sm font-bold text-foreground">
                 {bill.restaurant_tables?.table_number || 'N/A'}
               </span>
             </div>
             <div>
-              <span className="text-[#6B635C] font-semibold block">Status</span>
-              <span className={`inline-block font-bold text-[11px] px-2 py-0.5 rounded-full uppercase ${isApproved ? 'bg-emerald-100 text-emerald-800' :
-                  isPending ? 'bg-amber-100 text-amber-800' :
-                    'bg-red-100 text-red-800'
+              <span className="mb-1 block text-xs font-semibold text-muted-foreground">Status</span>
+              <span className={`inline-block rounded-full px-2.5 py-1 text-xs font-semibold uppercase ${isApproved ? 'bg-success-soft text-success-foreground' :
+                  isPending ? 'bg-warning-soft text-warning-foreground' :
+                    'bg-danger-soft text-danger-foreground'
                 }`}>
                 {bill.status.replace('_', ' ')}
               </span>
             </div>
             <div>
-              <span className="text-[#6B635C] font-semibold block">Waiter</span>
-              <span className="font-medium text-[#2B2623]">{bill.waiter?.full_name || 'Staff'}</span>
+              <span className="block text-xs font-semibold text-muted-foreground">Waiter</span>
+              <span className="font-medium text-foreground">{bill.waiter?.full_name || 'Staff'}</span>
             </div>
             <div>
-              <span className="text-[#6B635C] font-semibold block">Submitted At</span>
-              <span className="font-medium text-[#2B2623]">
+              <span className="block text-xs font-semibold text-muted-foreground">Submitted At</span>
+              <span className="font-medium text-foreground">
                 {new Date(bill.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
               </span>
             </div>
@@ -75,30 +79,30 @@ export const BillDetailModal = ({ bill, onClose, onApprove, onReject }) => {
 
           {/* Rejection Alert if rejected */}
           {isRejected && bill.rejection_reason && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-800 space-y-1">
-              <span className="font-bold flex items-center gap-1 text-red-900">
-                <XCircle className="w-4 h-4 text-red-700" />
+            <div className="space-y-1 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-foreground">
+              <span className="flex items-center gap-1 font-bold">
+                <XCircle className="h-4 w-4" />
                 Admin Rejection Reason:
               </span>
-              <p className="font-medium pl-5">{bill.rejection_reason}</p>
+              <p className="pl-5 font-medium">{bill.rejection_reason}</p>
             </div>
           )}
 
           {/* Items Table Snapshot */}
-          <div className="bg-white border border-[#E8E4DE] rounded-xl overflow-hidden">
-            <div className="bg-[#FAF9F7] px-3 py-2 border-b border-[#E8E4DE] grid grid-cols-12 text-[11px] font-bold text-[#6B635C] uppercase tracking-wider">
-              <span className="col-span-6">Item Description</span>
-              <span className="col-span-2 text-center">Qty</span>
-              <span className="col-span-2 text-right">Price</span>
-              <span className="col-span-2 text-right">Total</span>
+          <div className="overflow-hidden rounded-lg border border-border bg-surface">
+            <div className="hidden grid-cols-12 border-b border-border bg-surface-muted px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground min-[420px]:grid">
+                  <span className="col-span-5">Item Description</span>
+                  <span className="col-span-1 text-center">Qty</span>
+                  <span className="col-span-3 text-right">Price</span>
+                  <span className="col-span-3 text-right">Total</span>
             </div>
-            <div className="divide-y divide-slate-100 text-xs">
+            <div className="divide-y divide-border text-sm">
               {bill.bill_items?.map((item) => (
-                <div key={item.id} className="px-3 py-2.5 grid grid-cols-12 items-center">
-                  <span className="col-span-6 font-semibold text-[#2B2623]">{item.item_name}</span>
-                  <span className="col-span-2 text-center text-slate-600 font-bold">{item.quantity}</span>
-                  <span className="col-span-2 text-right text-slate-600">{formatINR(item.unit_price)}</span>
-                  <span className="col-span-2 text-right font-bold text-[#2B2623]">
+                <div key={item.id} className="grid grid-cols-2 items-center gap-x-2 gap-y-2 px-3 py-3 min-[420px]:grid-cols-12 min-[420px]:gap-x-1">
+                  <span className="col-span-2 min-w-0 wrap-break-word font-semibold text-foreground min-[420px]:col-span-5">{item.item_name}</span>
+                  <span className="text-muted-foreground min-[420px]:col-span-1 min-[420px]:text-center"><span className="min-[420px]:sr-only">Qty: </span>{item.quantity}</span>
+                  <span className="text-right text-muted-foreground min-[420px]:col-span-3">{formatINR(item.unit_price)}</span>
+                  <span className="text-right font-bold text-foreground min-[420px]:col-span-3">
                     {formatINR(item.line_total || (item.unit_price * item.quantity))}
                   </span>
                 </div>
@@ -106,11 +110,11 @@ export const BillDetailModal = ({ bill, onClose, onApprove, onReject }) => {
             </div>
 
             {/* Bill Grand Total Bar */}
-            <div className="bg-[#FAF9F7] px-4 py-3 border-t-2 border-[#E8E4DE] flex items-center justify-between">
-              <span className="font-bold text-sm text-[#2B2623] uppercase tracking-wider">
+            <div className="flex items-center justify-between border-t border-border bg-surface-muted px-4 py-3">
+              <span className="text-sm font-bold uppercase tracking-wider text-foreground">
                 Grand Total
               </span>
-              <span className="text-xl font-bold text-[#14532D]">
+              <span className="text-xl font-bold text-success-foreground">
                 {formatINR(bill.total_amount)}
               </span>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDhaba } from '../../context/DhabaContext';
 import { 
   Armchair, 
@@ -8,12 +8,13 @@ import {
   X, 
   Users, 
   AlertCircle, 
-  Power,
   RotateCcw
 } from 'lucide-react';
+import { ToggleSwitch } from '../common/ToggleSwitch';
+import { notify } from '../../lib/notifications';
 
 export const TableManagement = () => {
-  const { tables, addTable, updateTable } = useDhaba();
+  const { tables, orders, waiters, addTable, updateTable, reassignOrderWaiter } = useDhaba();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -22,9 +23,16 @@ export const TableManagement = () => {
   const [editingTableId, setEditingTableId] = useState(null);
   const [editTableNumber, setEditTableNumber] = useState('');
   const [editCapacity, setEditCapacity] = useState('4');
+  const [selectedWaiters, setSelectedWaiters] = useState({});
+  const [assigningOrderId, setAssigningOrderId] = useState(null);
+  const [updatingTableId, setUpdatingTableId] = useState(null);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    setSelectedWaiters({});
+  }, [orders]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -33,6 +41,7 @@ export const TableManagement = () => {
 
     if (!newTableNumber.trim()) {
       setError('Table number or name is required');
+      notify.warning('Enter a table number or name.', 'table-create-validation');
       return;
     }
 
@@ -42,11 +51,14 @@ export const TableManagement = () => {
         capacity: Number(newCapacity) || 4
       });
       setSuccess(`Table ${newTableNumber.trim()} added successfully!`);
+      notify.success(`Table ${newTableNumber.trim()} added.`, 'table-created');
       setNewTableNumber('');
       setNewCapacity('4');
       setIsAdding(false);
     } catch (err) {
-      setError(err.message || 'Failed to add table');
+      console.error('Table creation failed:', err);
+      setError('Could not add this table. Check the table details and try again.');
+      notify.error('Could not add this table. Check the details and try again.', 'table-create-error');
     }
   };
 
@@ -65,22 +77,31 @@ export const TableManagement = () => {
         capacity: Number(editCapacity) || 4
       });
       setSuccess('Table updated successfully');
+      notify.success('Table details updated.', 'table-updated');
       setEditingTableId(null);
     } catch (err) {
-      setError(err.message || 'Failed to update table');
+      console.error('Table update failed:', err);
+      setError('Could not update this table. Please try again.');
+      notify.error('Could not update this table.', `table-update-error-${id}`);
     }
   };
 
   const handleToggleActive = async (table) => {
     setError('');
     setSuccess('');
+    setUpdatingTableId(table.id);
     try {
       await updateTable(table.id, {
         is_active: !table.is_active
       });
       setSuccess(`Table ${table.table_number} ${table.is_active ? 'deactivated' : 'activated'}`);
+      notify.success(`Table ${table.table_number} ${table.is_active ? 'deactivated' : 'activated'}.`, `table-status-${table.id}`);
     } catch (err) {
-      setError(err.message || 'Failed to update table status');
+      console.error('Table status update failed:', err);
+      setError('Could not update table status. Please try again.');
+      notify.error('Could not update table status.', `table-status-error-${table.id}`);
+    } finally {
+      setUpdatingTableId(null);
     }
   };
 
@@ -90,28 +111,50 @@ export const TableManagement = () => {
     try {
       await updateTable(table.id, { status: 'available' });
       setSuccess(`Table ${table.table_number} reset to Available.`);
+      notify.info(`Table ${table.table_number} is now available.`, `table-reset-${table.id}`);
     } catch (err) {
-      setError(err.message || 'Failed to reset table');
+      console.error('Table reset failed:', err);
+      setError('Could not reset this table. Please try again.');
+      notify.error('Could not reset this table.', `table-reset-error-${table.id}`);
+    }
+  };
+
+  const handleReassign = async (order) => {
+    const waiterId = selectedWaiters[order.id] || order.waiter_id;
+    if (waiterId === order.waiter_id) return;
+    setError('');
+    setSuccess('');
+    setAssigningOrderId(order.id);
+    try {
+      await reassignOrderWaiter(order.id, waiterId);
+      const waiterName = waiters.find((waiter) => waiter.id === waiterId)?.full_name || 'selected waiter';
+      notify.success(`Table reassigned to ${waiterName}.`, `reassign-${order.id}`);
+    } catch (err) {
+      console.error('Waiter reassignment failed:', err);
+      setError('Could not reassign the waiter. Please try again.');
+      notify.error('Could not reassign the waiter.', `reassign-error-${order.id}`);
+    } finally {
+      setAssigningOrderId(null);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-5 px-3 py-4 text-foreground sm:px-6 sm:py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
         <div>
-          <h2 className="text-xl sm:text-xl font-bold text-[#2B2623] flex items-center gap-2">
-            <Armchair className="w-6 h-6 text-[#C2570C]" />
+          <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <Armchair className="h-6 w-6 text-primary" />
             <span>Restaurant Tables Management</span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#6B635C] mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Configure dhaba seating capacity, table numbers, and monitor live table occupancy.
           </p>
         </div>
 
         <button
           onClick={() => setIsAdding(!isAdding)}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 shrink-0"
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
         >
           {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           <span>{isAdding ? 'Cancel' : 'Add New Table'}</span>
@@ -120,13 +163,13 @@ export const TableManagement = () => {
 
       {/* Notification alerts */}
       {error && (
-        <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-foreground">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {success && (
-        <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft p-3 text-sm text-success-foreground">
           <Check className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
@@ -134,11 +177,11 @@ export const TableManagement = () => {
 
       {/* Add Table Form */}
       {isAdding && (
-        <form onSubmit={handleCreate} className="bg-[#FAF9F7] border-2 border-[#C2570C]/40 rounded-xl p-5 shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-[#2B2623]">Create New Dhaba Table</h3>
+        <form onSubmit={handleCreate} className="space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <h3 className="text-sm font-bold text-foreground">Create New Dhaba Table</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Table Name / Number *
               </label>
               <input
@@ -146,12 +189,12 @@ export const TableManagement = () => {
                 value={newTableNumber}
                 onChange={(e) => setNewTableNumber(e.target.value)}
                 placeholder="e.g. T-13 or Khatiya-1"
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Seating Capacity *
               </label>
               <input
@@ -160,7 +203,7 @@ export const TableManagement = () => {
                 max="30"
                 value={newCapacity}
                 onChange={(e) => setNewCapacity(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                 required
               />
             </div>
@@ -169,13 +212,13 @@ export const TableManagement = () => {
             <button
               type="button"
               onClick={() => setIsAdding(false)}
-              className="px-4 py-2 bg-white text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold border border-slate-300"
+              className="min-h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-foreground hover:bg-surface-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold shadow-sm active:scale-95"
+              className="min-h-10 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
             >
               Save Table
             </button>
@@ -184,47 +227,50 @@ export const TableManagement = () => {
       )}
 
       {/* Table Status Legend */}
-      <div className="flex flex-wrap items-center gap-3 text-xs bg-white border border-[#E8E4DE] p-3 rounded-xl">
-        <span className="font-bold text-[#2B2623] mr-1">Status Legend:</span>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-3 text-xs text-muted-foreground">
+        <span className="mr-1 font-bold text-foreground">Status Legend:</span>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+          <span className="h-3 w-3 rounded-full bg-success"></span>
           <span>Available</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+          <span className="h-3 w-3 rounded-full bg-warning"></span>
           <span>Occupied (Running Order)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-purple-600"></span>
+          <span className="h-3 w-3 rounded-full bg-info"></span>
           <span>Bill Pending Approval</span>
         </div>
-        <div className="flex items-center gap-1.5 ml-auto text-slate-500">
+        <div className="ml-auto flex items-center gap-1.5 text-muted-foreground">
           <span>Total Tables: {tables.length}</span>
         </div>
       </div>
 
       {/* Tables Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
         {tables.map((table) => {
           const isOccupied = table.status === 'occupied';
           const isAvailable = table.status === 'available';
+          const activeOrder = orders.find((order) =>
+            order.table_id === table.id && ['active', 'correction', 'in_review'].includes(order.status)
+          );
 
-          const statusColor = isAvailable 
-            ? 'border-emerald-500/40 bg-emerald-50/40 text-emerald-950'
-            : isOccupied 
-            ? 'border-amber-500/60 bg-amber-50/50 text-amber-950' 
-            : 'border-purple-500/60 bg-purple-50/50 text-purple-950';
+          const statusColor = isAvailable
+            ? 'border-success/30 bg-surface'
+            : isOccupied
+            ? 'border-accent/40 bg-surface'
+            : 'border-warning/40 bg-surface';
 
-          const badgeColor = isAvailable 
-            ? 'bg-emerald-600 text-white' 
-            : isOccupied 
-            ? 'bg-amber-600 text-white' 
-            : 'bg-purple-600 text-white';
+          const badgeColor = isAvailable
+            ? 'bg-success-soft text-success-foreground'
+            : isOccupied
+            ? 'bg-accent-soft text-warning-foreground'
+            : 'bg-warning-soft text-warning-foreground';
 
           return (
             <div
               key={table.id}
-              className={`border-2 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between transition-all relative ${statusColor} ${
+              className={`relative flex flex-col justify-between rounded-xl border p-4 transition-all ${statusColor} ${
                 !table.is_active ? 'opacity-50 grayscale' : 'shadow-xs hover:shadow-sm'
               }`}
             >
@@ -234,25 +280,25 @@ export const TableManagement = () => {
                     type="text"
                     value={editTableNumber}
                     onChange={(e) => setEditTableNumber(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-white border border-[#E8E4DE] rounded-lg"
+                    className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
                   />
                   <input
                     type="number"
                     min="1"
                     value={editCapacity}
                     onChange={(e) => setEditCapacity(e.target.value)}
-                    className="w-full text-xs p-1.5 bg-white border border-[#E8E4DE] rounded-lg"
+                    className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
                   />
                   <div className="flex gap-1 justify-end">
                     <button
                       onClick={() => setEditingTableId(null)}
-                      className="p-1 bg-slate-200 text-slate-700 rounded-md"
+                      className="grid h-9 w-9 place-items-center rounded-md bg-surface-muted text-foreground hover:bg-border"
                     >
                       <X className="w-3 h-3" />
                     </button>
                     <button
                       onClick={() => handleUpdate(table.id)}
-                      className="p-1 bg-emerald-600 text-white rounded-md"
+                      className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground hover:bg-primary-hover"
                     >
                       <Check className="w-3 h-3" />
                     </button>
@@ -262,46 +308,74 @@ export const TableManagement = () => {
                 <>
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-base sm:text-lg font-bold tracking-tight text-[#2B2623]">
+                      <span className="text-xl font-bold tracking-tight text-foreground">
                         {table.table_number}
                       </span>
                       <button
                         onClick={() => startEdit(table)}
-                        className="p-1 text-slate-400 hover:text-[#2B2623] rounded-md transition-colors"
+                        className="grid min-h-10 min-w-10 place-items-center rounded-md text-muted-foreground hover:bg-surface-muted hover:text-foreground"
                         title="Edit Table"
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
                     </div>
 
-                    <div className="flex items-center gap-1 text-xs text-slate-600 font-medium mb-3">
-                      <Users className="w-3.5 h-3.5 text-[#6B635C]" />
+                    <div className="mb-3 flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                      <Users className="h-4 w-4" />
                       <span>{table.capacity} Seats</span>
                     </div>
 
                     <div className="mb-3">
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${badgeColor}`}>
+                      <span className={`inline-block rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${badgeColor}`}>
                         {isAvailable ? 'Available' : isOccupied ? 'Occupied' : 'Bill Pending'}
                       </span>
                     </div>
+
+                    {activeOrder && (
+                      <div className="mb-3 space-y-1.5">
+                        <label htmlFor={`waiter-${activeOrder.id}`} className="block text-xs font-semibold text-muted-foreground">
+                          Assigned: {activeOrder.profiles?.full_name || 'Waiter'}
+                        </label>
+                        <select
+                          id={`waiter-${activeOrder.id}`}
+                          value={selectedWaiters[activeOrder.id] || activeOrder.waiter_id}
+                          onChange={(event) => setSelectedWaiters((previous) => ({
+                            ...previous,
+                            [activeOrder.id]: event.target.value
+                          }))}
+                          className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
+                        >
+                          {!waiters.some((waiter) => waiter.id === activeOrder.waiter_id) && (
+                            <option value={activeOrder.waiter_id}>
+                              {activeOrder.profiles?.full_name || 'Current waiter'} (inactive)
+                            </option>
+                          )}
+                          {waiters.map((waiter) => (
+                            <option key={waiter.id} value={waiter.id}>{waiter.full_name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={assigningOrderId === activeOrder.id || (selectedWaiters[activeOrder.id] || activeOrder.waiter_id) === activeOrder.waiter_id}
+                          onClick={() => handleReassign(activeOrder)}
+                          className="min-h-10 w-full rounded-md border border-border bg-surface px-2 text-xs font-semibold text-primary hover:bg-primary-soft disabled:opacity-40"
+                        >
+                          {assigningOrderId === activeOrder.id ? 'Reassigning…' : 'Reassign Waiter'}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="pt-2 border-t border-black/10 flex items-center justify-between text-xs">
-                    <button
-                      onClick={() => handleToggleActive(table)}
-                      className={`flex items-center gap-1 text-[11px] font-bold ${
-                        table.is_active ? 'text-slate-500 hover:text-red-700' : 'text-emerald-700'
-                      }`}
-                      title={table.is_active ? 'Deactivate Table' : 'Activate Table'}
-                    >
-                      <Power className="w-3 h-3" />
-                      <span>{table.is_active ? 'Active' : 'Off'}</span>
-                    </button>
+                    <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        <span>{table.is_active ? 'Active' : 'Off'}</span>
+                        <ToggleSwitch checked={table.is_active} loading={updatingTableId === table.id} onChange={() => handleToggleActive(table)} label={`${table.table_number} table status`} />
+                      </div>
 
                     {!isAvailable && (
                       <button
                         onClick={() => handleResetStatus(table)}
-                        className="text-[10px] text-slate-500 hover:text-[#C2570C] flex items-center gap-0.5"
+                        className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-xs font-semibold text-muted-foreground hover:bg-surface-muted hover:text-primary"
                         title="Force Reset Status to Available"
                       >
                         <RotateCcw className="w-2.5 h-2.5" />

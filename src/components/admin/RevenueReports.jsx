@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDhaba } from '../../context/DhabaContext';
 import { formatINR } from '../../lib/supabase';
+import { notify } from '../../lib/notifications';
 import { 
   TrendingUp, 
   Calendar, 
@@ -64,25 +65,26 @@ export const RevenueReports = () => {
     a.download = `mla_revenue_report_${dateFilter || 'all'}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+    notify.success('Revenue report exported.', 'revenue-exported');
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-5 px-3 py-4 text-foreground sm:px-6 sm:py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
         <div>
-          <h2 className="text-xl sm:text-xl font-bold text-[#2B2623] flex items-center gap-2">
-            <TrendingUp className="w-6 h-6 text-[#14532D]" />
+          <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <TrendingUp className="h-6 w-6 text-primary" />
             <span>Revenue & Financial Reports</span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#6B635C] mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Audited revenue calculated strictly from approved bills in the database.
           </p>
         </div>
 
         <button
           onClick={exportCSV}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Export CSV Report</span>
@@ -92,90 +94,91 @@ export const RevenueReports = () => {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Today's Revenue */}
-        <div className="bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[#6B635C] font-semibold mb-2">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-muted-foreground">
             <span>Today's Total Revenue</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-[#14532D] flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success-soft text-success-foreground">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-[#14532D]">
+          <div className="text-2xl font-bold text-success-foreground sm:text-3xl">
             {formatINR(metrics.todayRevenue)}
           </div>
-          <div className="text-xs text-[#2B2623] mt-1 font-medium">
+          <div className="mt-1 text-sm font-medium text-muted-foreground">
             From {metrics.todayCount} approved bills today
           </div>
         </div>
 
         {/* Daily Approved Bill Count */}
-        <div className="bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[#6B635C] font-semibold mb-2">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-muted-foreground">
             <span>Today's Bill Count</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-success-soft text-success-foreground">
               <ReceiptText className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-[#2B2623]">
+          <div className="text-2xl font-bold text-foreground sm:text-3xl">
             {metrics.todayCount}
           </div>
-          <div className="text-xs text-[#2B2623] mt-1 font-medium">
+          <div className="mt-1 text-sm font-medium text-muted-foreground">
             Daily approved table settlements
           </div>
         </div>
 
         {/* Monthly Revenue */}
-        <div className="bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[#6B635C] font-semibold mb-2">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-muted-foreground">
             <span>Monthly Total Revenue</span>
-            <div className="w-8 h-8 rounded-lg bg-[#C2570C]/10 text-[#C2570C] flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-soft text-primary">
               <Calendar className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-[#C2570C]">
+          <div className="text-2xl font-bold text-primary sm:text-3xl">
             {formatINR(metrics.monthRevenue)}
           </div>
-          <div className="text-xs text-[#2B2623] mt-1 font-medium">
+          <div className="mt-1 text-sm font-medium text-muted-foreground">
             For current calendar month
           </div>
         </div>
 
         {/* Monthly Approved Bill Count */}
-        <div className="bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-xs">
-          <div className="flex items-center justify-between text-xs text-[#6B635C] font-semibold mb-2">
+        <div className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <div className="mb-2 flex items-center justify-between text-sm font-semibold text-muted-foreground">
             <span>Monthly Bill Count</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning-soft text-warning-foreground">
               <ReceiptText className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-2xl sm:text-3xl font-bold text-[#2B2623]">
+          <div className="text-2xl font-bold text-foreground sm:text-3xl">
             {metrics.monthCount}
           </div>
-          <div className="text-xs text-[#2B2623] mt-1 font-medium">
+          <div className="mt-1 text-sm font-medium text-muted-foreground">
             Total approved bills this month
           </div>
         </div>
       </div>
 
       {/* Date Filter & Breakdown Section */}
-      <div className="bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-sm space-y-4">
+      <div className="space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h3 className="font-bold text-base text-[#2B2623] flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-[#C2570C]" />
+          <h3 className="flex items-center gap-2 text-base font-bold text-foreground">
+            <Calendar className="h-4 w-4 text-primary" />
             <span>Audited Bill History</span>
           </h3>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#6B635C] font-bold">Filter Date:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="revenue-date-filter" className="text-sm font-semibold text-muted-foreground">Filter Date:</label>
             <input
+              id="revenue-date-filter"
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="px-3 py-1.5 bg-[#FAF9F7] border border-[#E8E4DE] rounded-xl text-xs font-semibold text-[#2B2623]"
+              className="min-h-11 rounded-md border border-border bg-surface-muted px-3 text-base font-medium text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
             />
             {dateFilter && (
               <button
                 onClick={() => setDateFilter('')}
-                className="text-xs text-slate-500 hover:text-red-600 underline font-semibold"
+                className="min-h-10 rounded-md px-2 text-sm font-semibold text-muted-foreground underline hover:text-danger-foreground"
               >
                 Clear
               </button>
@@ -184,48 +187,48 @@ export const RevenueReports = () => {
         </div>
 
         {dateFilter && (
-          <div className="bg-[#FAF9F7] p-3 rounded-xl border border-[#E8E4DE] flex items-center justify-between text-xs">
-            <span className="font-bold text-[#2B2623]">
+          <div className="flex flex-col justify-between gap-2 rounded-lg border border-border bg-surface-muted p-3 text-sm sm:flex-row sm:items-center">
+            <span className="font-semibold text-foreground">
               Filtered Date: {dateFilter} ({filteredApprovedBills.length} approved bills)
             </span>
-            <span className="font-bold text-[#14532D] text-sm">
+            <span className="font-bold text-success-foreground">
               Total: {formatINR(filteredTotal)}
             </span>
           </div>
         )}
 
         {/* Daily Grouped Summary Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="space-y-3 md:overflow-x-auto">
+          <table className="hidden w-full text-left text-sm md:table">
             <thead>
-              <tr className="bg-[#FAF9F7] border-b border-[#E8E4DE] text-[#6B635C] uppercase tracking-wider font-bold">
+              <tr className="border-b border-border bg-surface-muted text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="py-2.5 px-3">Date</th>
                 <th className="py-2.5 px-3 text-center">Approved Bills Count</th>
                 <th className="py-2.5 px-3 text-right">Recognized Revenue</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border">
               {dailyBreakdown.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                  <td colSpan={4} className="py-8 text-center text-muted-foreground">
                     No approved revenue history recorded yet.
                   </td>
                 </tr>
               ) : (
                 dailyBreakdown.map((row) => (
-                  <tr key={row.date} className="hover:bg-[#FAF9F7] transition-colors">
-                    <td className="py-3 px-3 font-bold text-[#2B2623]">
+                  <tr key={row.date} className="transition-colors hover:bg-surface-muted">
+                    <td className="px-3 py-3 font-semibold text-foreground">
                       {new Date(row.date).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="py-3 px-3 text-center font-semibold text-slate-700">
+                    <td className="px-3 py-3 text-center font-medium text-muted-foreground">
                       {row.count} bills
                     </td>
-                    <td className="py-3 px-3 text-right font-bold text-sm text-[#14532D]">
+                    <td className="px-3 py-3 text-right font-bold text-success-foreground">
                       {formatINR(row.totalRevenue)}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success-foreground">
                         <CheckCircle2 className="w-3 h-3" />
                         Audited
                       </span>
@@ -235,6 +238,21 @@ export const RevenueReports = () => {
               )}
             </tbody>
           </table>
+          {dailyBreakdown.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground md:hidden">No approved revenue history recorded yet.</div>
+          ) : (
+            <div className="space-y-3 md:hidden">
+              {dailyBreakdown.map((row) => (
+                <article key={row.date} className="rounded-lg border border-border bg-surface p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div><p className="font-semibold text-foreground">{new Date(row.date).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p><p className="mt-1 text-sm text-muted-foreground">{row.count} bills</p></div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success-foreground"><CheckCircle2 className="h-3 w-3" />Audited</span>
+                  </div>
+                  <p className="mt-3 border-t border-border pt-3 text-lg font-bold text-success-foreground">{formatINR(row.totalRevenue)}</p>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

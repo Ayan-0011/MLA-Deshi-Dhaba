@@ -10,10 +10,10 @@ import {
   X, 
   AlertCircle, 
   Utensils, 
-  ToggleLeft, 
-  ToggleRight,
   ShieldAlert
 } from 'lucide-react';
+import { ToggleSwitch } from '../common/ToggleSwitch';
+import { notify } from '../../lib/notifications';
 
 export const MenuManagement = () => {
   const { categories, menuItems, addMenuItem, updateMenuItem, addCategory } = useDhaba();
@@ -40,6 +40,7 @@ export const MenuManagement = () => {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [updatingAvailabilityId, setUpdatingAvailabilityId] = useState(null);
 
   const handleCreateItem = async (e) => {
     e.preventDefault();
@@ -48,6 +49,7 @@ export const MenuManagement = () => {
 
     if (!itemName.trim() || !itemPrice) {
       setError('Name and price are required');
+      notify.warning('Enter a dish name and price.', 'menu-item-validation');
       return;
     }
 
@@ -60,12 +62,15 @@ export const MenuManagement = () => {
         is_available: true
       });
       setSuccess(`Added "${itemName.trim()}" to food menu!`);
+      notify.success('Menu item added.', 'menu-item-added');
       setItemName('');
       setItemPrice('');
       setItemDescription('');
       setIsAddingItem(false);
     } catch (err) {
-      setError(err.message || 'Failed to add food item');
+      console.error('Menu item creation failed:', err);
+      setError('Could not add this menu item. Please check the details and try again.');
+      notify.error('Could not add this menu item.', 'menu-item-create-error');
     }
   };
 
@@ -76,16 +81,20 @@ export const MenuManagement = () => {
 
     if (!newCatName.trim()) {
       setError('Category name is required');
+      notify.warning('Enter a category name.', 'menu-category-validation');
       return;
     }
 
     try {
       await addCategory(newCatName.trim(), categories.length + 1);
       setSuccess(`Category "${newCatName.trim()}" created!`);
+      notify.success('Menu category created.', 'menu-category-created');
       setNewCatName('');
       setIsAddingCategory(false);
     } catch (err) {
-      setError(err.message || 'Failed to add category');
+      console.error('Category creation failed:', err);
+      setError('Could not create this category. Please try again.');
+      notify.error('Could not create this category.', 'menu-category-create-error');
     }
   };
 
@@ -106,19 +115,28 @@ export const MenuManagement = () => {
         description: editDescription.trim()
       });
       setSuccess('Menu item updated. Note: Running orders and finalized bills keep their snapshot prices.');
+      notify.success('Menu item updated.', 'menu-item-updated');
       setEditingItemId(null);
     } catch (err) {
-      setError(err.message || 'Failed to update item');
+      console.error('Menu item update failed:', err);
+      setError('Could not update this menu item. Please try again.');
+      notify.error('Could not update this menu item.', `menu-item-update-error-${id}`);
     }
   };
 
   const handleToggleAvailability = async (item) => {
+    setUpdatingAvailabilityId(item.id);
     try {
       await updateMenuItem(item.id, {
         is_available: !item.is_available
       });
+      notify.success(`${item.name} is now ${item.is_available ? 'unavailable' : 'available'}.`, `menu-item-toggle-${item.id}`);
     } catch (err) {
-      setError(err.message || 'Failed to toggle availability');
+      console.error('Menu availability update failed:', err);
+      setError('Could not update availability. Please try again.');
+      notify.error('Could not update menu availability.', `menu-item-toggle-error-${item.id}`);
+    } finally {
+      setUpdatingAvailabilityId(null);
     }
   };
 
@@ -130,15 +148,15 @@ export const MenuManagement = () => {
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-6 py-6">
+    <div className="mx-auto max-w-7xl space-y-5 px-3 py-4 text-foreground sm:px-6 sm:py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E8E4DE] rounded-xl p-5 shadow-sm">
+      <div className="flex flex-col justify-between gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:items-center sm:p-5">
         <div>
-          <h2 className="text-xl sm:text-xl font-bold text-[#2B2623] flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-[#C2570C]" />
+          <h2 className="flex items-center gap-2 text-xl font-bold text-foreground">
+            <BookOpen className="h-6 w-6 text-primary" />
             <span>Food Menu & Pricing</span>
           </h2>
-          <p className="text-xs sm:text-sm text-[#6B635C] mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Manage traditional dhaba categories, dishes, prices, and kitchen availability.
           </p>
         </div>
@@ -146,14 +164,14 @@ export const MenuManagement = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setIsAddingCategory(!isAddingCategory)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-[#E8E4DE] hover:border-[#C2570C] text-[#2B2623] rounded-xl text-xs font-bold transition-all shadow-xs"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-semibold text-foreground hover:bg-surface-muted"
           >
-            <Plus className="w-3.5 h-3.5 text-[#C2570C]" />
+            <Plus className="h-4 w-4 text-primary" />
             <span>{isAddingCategory ? 'Cancel' : 'New Category'}</span>
           </button>
           <button
             onClick={() => setIsAddingItem(!isAddingItem)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>{isAddingItem ? 'Cancel' : 'Add Food Item'}</span>
@@ -162,21 +180,21 @@ export const MenuManagement = () => {
       </div>
 
       {/* Snapshot Pricing Info Notice */}
-      <div className="bg-[#FAF9F7] border border-[#C2570C]/30 rounded-xl p-3 flex items-start gap-2.5 text-xs text-[#2B2623]">
-        <ShieldAlert className="w-4 h-4 text-[#C2570C] shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2.5 rounded-lg border border-info/30 bg-info-soft p-3 text-sm text-info-foreground">
+        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
           <strong>Price Protection:</strong> Updating a menu price here will immediately affect newly added items, but will <em>never</em> alter items already added to existing running orders or finalized bills.
         </p>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-foreground">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
       {success && (
-        <div className="p-3 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs flex items-center gap-2">
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-success/30 bg-success-soft p-3 text-sm text-success-foreground">
           <Check className="w-4 h-4 shrink-0" />
           <span>{success}</span>
         </div>
@@ -184,18 +202,18 @@ export const MenuManagement = () => {
 
       {/* Add Category Form */}
       {isAddingCategory && (
-        <form onSubmit={handleCreateCategory} className="bg-white border-2 border-[#C2570C]/40 rounded-xl p-4 shadow-sm flex items-center gap-3">
+        <form onSubmit={handleCreateCategory} className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row">
           <input
             type="text"
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             placeholder="New Category Name (e.g. Desserts, Chaat)"
-            className="flex-1 px-3.5 py-2 bg-[#FAF9F7] border border-[#E8E4DE] rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+            className="min-h-11 min-w-0 flex-1 rounded-md border border-border bg-surface-muted px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
             required
           />
           <button
             type="submit"
-            className="px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold shadow-xs active:scale-95"
+            className="min-h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
           >
             Create Category
           </button>
@@ -204,11 +222,11 @@ export const MenuManagement = () => {
 
       {/* Add Food Item Form */}
       {isAddingItem && (
-        <form onSubmit={handleCreateItem} className="bg-[#FAF9F7] border-2 border-[#C2570C]/40 rounded-xl p-5 shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-[#2B2623]">Add New Menu Item</h3>
+        <form onSubmit={handleCreateItem} className="space-y-4 rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-5">
+          <h3 className="text-sm font-bold text-foreground">Add New Menu Item</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Item Name *
               </label>
               <input
@@ -216,18 +234,18 @@ export const MenuManagement = () => {
                 value={itemName}
                 onChange={(e) => setItemName(e.target.value)}
                 placeholder="e.g. Kadhai Paneer Special"
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                 required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Category *
               </label>
               <select
                 value={itemCategory}
                 onChange={(e) => setItemCategory(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
               >
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -235,7 +253,7 @@ export const MenuManagement = () => {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+              <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                 Price in ₹ (INR) *
               </label>
               <input
@@ -245,13 +263,13 @@ export const MenuManagement = () => {
                 value={itemPrice}
                 onChange={(e) => setItemPrice(e.target.value)}
                 placeholder="150"
-                className="w-full px-3.5 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+                className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
                 required
               />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-bold text-[#6B635C] uppercase mb-1">
+            <label className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
               Description (Optional)
             </label>
             <input
@@ -259,20 +277,20 @@ export const MenuManagement = () => {
               value={itemDescription}
               onChange={(e) => setItemDescription(e.target.value)}
               placeholder="e.g. Cooked with freshly roasted spices and desi ghee"
-              className="w-full px-3.5 py-2 bg-white border border-[#E8E4DE] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+              className="min-h-11 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
             />
           </div>
           <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setIsAddingItem(false)}
-              className="px-4 py-2 bg-white text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold border border-slate-300"
+              className="min-h-10 rounded-md border border-border bg-surface px-4 text-sm font-semibold text-foreground hover:bg-surface-muted"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold shadow-sm active:scale-95"
+              className="min-h-10 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
             >
               Add Item
             </button>
@@ -284,13 +302,13 @@ export const MenuManagement = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-[#6B635C] absolute left-3.5 top-3" />
+          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search food item by name or ingredients..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E8E4DE] rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-[#C2570C]"
+            className="min-h-11 w-full rounded-md border border-border bg-surface py-2.5 pl-10 pr-4 text-base text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:text-sm"
           />
         </div>
 
@@ -300,8 +318,8 @@ export const MenuManagement = () => {
             onClick={() => setSelectedCategory('all')}
             className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
               selectedCategory === 'all'
-                ? 'bg-[#C2570C] text-white shadow-xs'
-                : 'bg-white text-[#2B2623] border border-[#E8E4DE] hover:bg-[#FAF9F7]'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'border border-border bg-surface text-foreground hover:bg-surface-muted'
             }`}
           >
             All Items ({menuItems.length})
@@ -312,8 +330,8 @@ export const MenuManagement = () => {
               onClick={() => setSelectedCategory(cat.id)}
               className={`px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors ${
                 selectedCategory === cat.id
-                  ? 'bg-[#C2570C] text-white shadow-xs'
-                  : 'bg-white text-[#2B2623] border border-[#E8E4DE] hover:bg-[#FAF9F7]'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'border border-border bg-surface text-foreground hover:bg-surface-muted'
               }`}
             >
               {cat.name}
@@ -323,56 +341,62 @@ export const MenuManagement = () => {
       </div>
 
       {/* Food Items List / Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {filteredItems.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-surface p-10 text-center">
+          <Utensils className="mx-auto mb-3 h-9 w-9 text-muted-foreground" />
+          <h3 className="font-bold text-foreground">No menu items found</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Try another search or add a new dish.</p>
+        </div>
+      ) : <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredItems.map((item) => (
           <div
             key={item.id}
-            className={`bg-white border rounded-xl p-4 transition-all flex flex-col justify-between ${
+            className={`flex flex-col justify-between rounded-xl border p-4 transition-all ${
               item.is_available 
-                ? 'border-[#E8E4DE] shadow-xs hover:border-[#D6CFC6]' 
-                : 'border-slate-200 bg-slate-50/70 opacity-60'
+                ? 'border-border bg-surface shadow-sm hover:border-primary/40' 
+                : 'border-border bg-surface-muted opacity-70'
             }`}
           >
             {editingItemId === item.id ? (
               <div className="space-y-3">
                 <div>
-                  <label className="text-[10px] font-bold text-[#6B635C]">Name</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Name</label>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border border-[#E8E4DE] rounded-lg"
+                    className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[#6B635C]">Price (₹)</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Price (₹)</label>
                   <input
                     type="number"
                     min="0"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border border-[#E8E4DE] rounded-lg"
+                    className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-[#6B635C]">Description</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Description</label>
                   <input
                     type="text"
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border border-[#E8E4DE] rounded-lg"
+                    className="min-h-10 w-full rounded-md border border-border bg-surface px-3 text-base text-foreground sm:text-sm"
                   />
                 </div>
                 <div className="flex gap-2 justify-end pt-1">
                   <button
                     onClick={() => setEditingItemId(null)}
-                    className="px-3 py-1 bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold"
+                    className="min-h-10 rounded-md bg-surface-muted px-3 text-sm font-semibold text-foreground hover:bg-border"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => handleSaveEdit(item.id)}
-                    className="px-3 py-1 bg-[#C2570C] text-white rounded-lg text-xs font-bold"
+                    className="min-h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary-hover"
                   >
                     Save
                   </button>
@@ -383,41 +407,36 @@ export const MenuManagement = () => {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="font-bold text-sm sm:text-base text-[#2B2623]">
+                      <h4 className="font-bold text-base text-foreground">
                         {item.name}
                       </h4>
-                      <span className="inline-block mt-0.5 text-[10px] font-semibold text-[#C2570C] bg-[#FAF9F7] px-2 py-0.5 rounded-md">
+                      <span className="mt-1 inline-block rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold text-primary">
                         {item.menu_categories?.name || 'Dish'}
                       </span>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-base font-bold text-[#14532D]">
+                      <div className="text-base font-bold text-success-foreground">
                         {formatINR(item.price)}
                       </div>
                     </div>
                   </div>
 
                   {item.description && (
-                    <p className="text-xs text-slate-500 mt-2 line-clamp-2">
+                    <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
                       {item.description}
                     </p>
                   )}
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <button
-                    onClick={() => handleToggleAvailability(item)}
-                    className={`flex items-center gap-1.5 font-bold transition-colors ${
-                      item.is_available ? 'text-emerald-700' : 'text-slate-400'
-                    }`}
-                  >
-                    {item.is_available ? <ToggleRight className="w-5 h-5 text-emerald-600" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
-                    <span>{item.is_available ? 'In Stock' : 'Out of Stock'}</span>
-                  </button>
+                <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+                  <div className={`flex items-center gap-2 font-semibold transition-colors ${item.is_available ? 'text-success-foreground' : 'text-muted-foreground'}`}>
+                    <ToggleSwitch checked={item.is_available} loading={updatingAvailabilityId === item.id} onChange={() => handleToggleAvailability(item)} label={`${item.name} availability`} />
+                    <span>{item.is_available ? 'Available' : 'Unavailable'}</span>
+                  </div>
 
                   <button
                     onClick={() => startEdit(item)}
-                    className="p-1.5 text-slate-500 hover:text-[#2B2623] hover:bg-[#FAF9F7] rounded-lg transition-colors flex items-center gap-1"
+                    className="inline-flex min-h-10 items-center gap-2 rounded-md px-2 text-sm font-semibold text-muted-foreground hover:bg-surface-muted hover:text-foreground"
                     title="Edit Item Details"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
@@ -428,7 +447,7 @@ export const MenuManagement = () => {
             )}
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 };
