@@ -13,6 +13,7 @@ export const DhabaProvider = ({ children }) => {
   const [categories, setCategories] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [waiters, setWaiters] = useState([]);
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -55,6 +56,16 @@ export const DhabaProvider = ({ children }) => {
 
       if (menuErr) console.warn('Error fetching menu items:', menuErr.message);
       else setMenuItems(menuData || []);
+
+      const { data: waitersData, error: waitersErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, is_active')
+        .eq('role', 'waiter')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true });
+
+      if (waitersErr) console.warn('Error fetching waiters:', waitersErr.message);
+      else setWaiters(waitersData || []);
 
       // Fetch Orders with items and table details
       const { data: ordersData, error: ordersErr } = await supabase
@@ -204,181 +215,38 @@ export const DhabaProvider = ({ children }) => {
       throw new Error('Order must have at least one item');
     }
 
-    try {
-      // 1. Try atomic RPC if available
-      const { data: rpcData, error: rpcError } = await supabase.rpc('save_running_order', {
-        p_table_id: tableId,
-        p_waiter_id: waiterId,
-        p_items: items,
-        p_notes: notes
-      });
+    const { data: orderId, error: rpcError } = await supabase.rpc('save_running_order', {
+      p_table_id: tableId,
+      p_waiter_id: waiterId,
+      p_items: items,
+      p_notes: notes
+    });
 
-      if (!rpcError) {
-        await fetchData();
-        return rpcData;
-      }
-      if (!isRpcMissing(rpcError)) throw rpcError;
-    } catch (e) {
-      if (!isRpcMissing(e)) throw e;
-      console.warn('RPC save_running_order not available, using fallback:', e);
-    }
-
-    // Direct Database Fallback:
-    // 1. Check for existing active or correction order for this table
-    let orderId;
-    const { data: existingOrders } = await supabase
-      .from('orders')
-      .select('id')
-      .eq('table_id', tableId)
-      .in('status', ['active', 'correction'])
-      .maybeSingle();
-
-    if (existingOrders?.id) {
-      orderId = existingOrders.id;
-      await supabase
-        .from('orders')
-        .update({
-          waiter_id: waiterId,
-          notes: notes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', orderId);
-    } else {
-      const { data: newOrder, error: createErr } = await supabase
-        .from('orders')
-        .insert({
-          table_id: tableId,
-          waiter_id: waiterId,
-          status: 'active',
-          notes: notes
-        })
-        .select()
-        .single();
-
-      if (createErr) throw createErr;
-      orderId = newOrder.id;
-    }
-
-    // 2. Update table status to 'occupied'
-    await supabase
-      .from('restaurant_tables')
-      .update({ status: 'occupied', updated_at: new Date().toISOString() })
-      .eq('id', tableId);
-
-    // 3. Clear old items and insert updated items with price snapshots
-    await supabase.from('order_items').delete().eq('order_id', orderId);
-
-    const formattedItems = items.map(item => ({
-      order_id: orderId,
-      menu_item_id: item.menu_item_id || item.id,
-      item_name: item.item_name || item.name,
-      unit_price: Number(item.unit_price || item.price),
-      quantity: Number(item.quantity)
-    }));
-
-    const { error: itemsErr } = await supabase
-      .from('order_items')
-      .insert(formattedItems);
-
-    if (itemsErr) throw itemsErr;
-
+    if (rpcError) throw rpcError;
     await fetchData();
     return orderId;
+  };
+
+  const reassignOrderWaiter = async (orderId, waiterId) => {
+    const { data, error: rpcError } = await supabase.rpc('reassign_order_waiter', {
+      p_order_id: orderId,
+      p_waiter_id: waiterId
+    });
+    if (rpcError) throw rpcError;
+    await fetchData();
+    return data;
   };
 
   // ===================== BILL ACTIONS =====================
   // Waiter generates final bill preview and submits to admin
   const generateFinalBill = async (orderId, waiterId) => {
-    try {
-      // 1. Try atomic RPC
-      const { data: rpcData, error: rpcError } = await supabase.rpc('generate_final_bill', {
-        p_order_id: orderId,
-        p_waiter_id: waiterId
-      });
-
-      if (!rpcError) {
-        await fetchData();
-        return rpcData;
-      }
-      if (!isRpcMissing(rpcError)) throw rpcError;
-    } catch (e) {
-      if (!isRpcMissing(e)) throw e;
-      console.warn('RPC generate_final_bill not available, using fallback:', e);
-    }
-
-    // Direct Database Fallback:
-    // 1. Fetch order details with order_items
-    const { data: order, error: orderErr } = await supabase
-      .from('orders')
-      .select('*, order_items(*)')
-      .eq('id', orderId)
-      .single();
-
-    if (orderErr || !order) throw new Error('Order not found');
-    if (!order.order_items || order.order_items.length === 0) {
-      throw new Error('Order has no items');
-    }
-
-    const totalAmount = order.order_items.reduce((sum, item) => {
-      return sum + (Number(item.unit_price) * Number(item.quantity));
-    }, 0);
-
-    // Unique bill number: MLA-YYYYMMDD-RANDOM4
-    const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randNum = Math.floor(1000 + Math.random() * 9000);
-    const billNumber = `MLA-${todayStr}-${randNum}`;
-
-    // 2. Insert bill
-    const { data: bill, error: billErr } = await supabase
-      .from('bills')
-      .insert({
-        bill_number: billNumber,
-        order_id: orderId,
-        table_id: order.table_id,
-        waiter_id: waiterId,
-        status: 'pending_approval',
-        total_amount: totalAmount,
-        submitted_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (billErr) throw billErr;
-
-    // 3. Snapshot items into bill_items
-    const billItems = order.order_items.map(item => ({
-      bill_id: bill.id,
-      menu_item_id: item.menu_item_id,
-      item_name: item.item_name,
-      unit_price: Number(item.unit_price),
-      quantity: Number(item.quantity),
-      line_total: Number(item.unit_price) * Number(item.quantity)
-    }));
-
-    await supabase.from('bill_items').insert(billItems);
-
-    // 4. Update order status -> in_review
-    await supabase
-      .from('orders')
-      .update({ status: 'in_review', updated_at: new Date().toISOString() })
-      .eq('id', orderId);
-
-    // 5. Update table status -> bill_pending
-    await supabase
-      .from('restaurant_tables')
-      .update({ status: 'bill_pending', updated_at: new Date().toISOString() })
-      .eq('id', order.table_id);
-
-    // 6. Record in bill_history
-    await supabase.from('bill_history').insert({
-      bill_id: bill.id,
-      action: 'submitted',
-      performed_by: waiterId,
-      notes: 'Final bill submitted for admin review'
+    const { data: rpcData, error: rpcError } = await supabase.rpc('generate_final_bill', {
+      p_order_id: orderId,
+      p_waiter_id: waiterId
     });
-
+    if (rpcError) throw rpcError;
     await fetchData();
-    return bill;
+    return rpcData;
   };
 
   // Admin approves bill: atomically marks bill approved, closes order, frees table
@@ -580,6 +448,7 @@ export const DhabaProvider = ({ children }) => {
         categories,
         menuItems,
         orders,
+        waiters,
         bills,
         loading,
         error,
@@ -590,6 +459,7 @@ export const DhabaProvider = ({ children }) => {
         updateMenuItem,
         addCategory,
         saveRunningOrder,
+        reassignOrderWaiter,
         generateFinalBill,
         approveBill,
         rejectBill,

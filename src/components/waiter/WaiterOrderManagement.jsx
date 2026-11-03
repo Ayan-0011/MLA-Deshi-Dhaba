@@ -30,6 +30,10 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
       (o) => o.table_id === table.id && (o.status === 'active' || o.status === 'correction')
     );
   }, [orders, table.id]);
+  const isReadOnly = Boolean(activeOrder && activeOrder.waiter_id !== user?.id);
+  const assignedWaiterName = activeOrder?.profiles?.full_name ||
+    (activeOrder?.waiter_id === user?.id ? profile?.full_name : null) ||
+    'Assigned waiter';
 
   // Local cart state for live manipulation
   const [cartItems, setCartItems] = useState([]);
@@ -77,7 +81,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Cart operations
   const handleAddItem = (menuItem) => {
-    if (!menuItem.is_available) return;
+    if (isReadOnly || !menuItem.is_available) return;
 
     setCartItems((prev) => {
       const existingIndex = prev.findIndex((i) => i.menu_item_id === menuItem.id);
@@ -103,12 +107,14 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   };
 
   const handleIncrement = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) =>
       prev.map((i) => (i.menu_item_id === menuItemId ? { ...i, quantity: i.quantity + 1 } : i))
     );
   };
 
   const handleDecrement = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) =>
       prev
         .map((i) => (i.menu_item_id === menuItemId ? { ...i, quantity: i.quantity - 1 } : i))
@@ -117,11 +123,16 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
   };
 
   const handleRemoveItem = (menuItemId) => {
+    if (isReadOnly) return;
     setCartItems((prev) => prev.filter((i) => i.menu_item_id !== menuItemId));
   };
 
   // Save order to Supabase
   const handleSaveOrder = async (notify = true) => {
+    if (isReadOnly) {
+      setStatusMessage({ type: 'error', text: `Only ${assignedWaiterName} can modify this order.` });
+      return null;
+    }
     if (cartItems.length === 0) {
       setStatusMessage({ type: 'error', text: 'Cannot save an empty order. Please add items.' });
       return null;
@@ -145,6 +156,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Open Final Bill Modal
   const handleOpenFinalBill = async () => {
+    if (isReadOnly) return;
     if (cartItems.length === 0) {
       setStatusMessage({ type: 'error', text: 'Please add items before generating a bill.' });
       return;
@@ -158,6 +170,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
   // Confirm final bill submission to admin
   const handleConfirmFinalBill = async () => {
+    if (isReadOnly) return;
     setIsSubmittingBill(true);
     try {
       const orderIdToBill = activeOrder?.id || (await handleSaveOrder(false));
@@ -203,7 +216,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              Waiter: {profile?.full_name || user?.email?.split('@')[0]}
+              Assigned waiter: {activeOrder ? assignedWaiterName : (profile?.full_name || user?.email?.split('@')[0])}
             </p>
           </div>
         </div>
@@ -212,7 +225,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            disabled={savingOrder || cartItems.length === 0}
+            disabled={isReadOnly || savingOrder || cartItems.length === 0}
             onClick={() => handleSaveOrder(true)}
             className="px-3.5 py-2 bg-[#FAF9F7] hover:bg-[#FAF9F7] text-[#2B2623] border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
           >
@@ -222,7 +235,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
           <button
             type="button"
-            disabled={cartItems.length === 0}
+            disabled={isReadOnly || cartItems.length === 0}
             onClick={handleOpenFinalBill}
             className="px-4 py-2 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-95 disabled:opacity-40"
           >
@@ -231,6 +244,12 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
           </button>
         </div>
       </div>
+
+      {isReadOnly && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold" role="status">
+          Read-only order — assigned to {assignedWaiterName}. You can view the items, but only the assigned waiter can make changes or submit the final bill.
+        </div>
+      )}
 
       {/* Notifications */}
       {statusMessage.text && (
@@ -337,8 +356,9 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                     ) : qty === 0 ? (
                       <button
                         type="button"
+                        disabled={isReadOnly}
                         onClick={() => handleAddItem(item)}
-                        className="w-full py-2 bg-[#FAF9F7] hover:bg-[#A8480A] text-[#2B2623] hover:text-white border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 active:scale-95"
+                        className="w-full py-2 bg-[#FAF9F7] hover:bg-[#A8480A] text-[#2B2623] hover:text-white border border-[#E8E4DE] rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add to Order</span>
@@ -347,8 +367,9 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                       <div className="w-full flex items-center justify-between bg-emerald-50 rounded-xl p-1 border border-[#C2570C]/40">
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleDecrement(item.id)}
-                          className="w-8 h-8 rounded-lg bg-white text-[#14532D] hover:bg-slate-100 flex items-center justify-center shadow-xs active:scale-90 font-bold"
+                          className="w-8 h-8 rounded-lg bg-white text-[#14532D] hover:bg-slate-100 flex items-center justify-center shadow-xs active:scale-90 font-bold disabled:opacity-50"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -357,8 +378,9 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                         </span>
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleIncrement(item.id)}
-                          className="w-8 h-8 rounded-lg bg-[#C2570C] text-white hover:bg-[#A8480A] flex items-center justify-center shadow-xs active:scale-90 font-bold"
+                          className="w-8 h-8 rounded-lg bg-[#C2570C] text-white hover:bg-[#A8480A] flex items-center justify-center shadow-xs active:scale-90 font-bold disabled:opacity-50"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>
@@ -412,8 +434,9 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleDecrement(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
+                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90 disabled:opacity-50"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
@@ -422,15 +445,17 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
                         </span>
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleIncrement(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90"
+                          className="w-7 h-7 rounded-lg bg-[#FAF9F7] hover:bg-slate-200 text-[#2B2623] flex items-center justify-center font-bold text-xs active:scale-90 disabled:opacity-50"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                         <button
                           type="button"
+                          disabled={isReadOnly}
                           onClick={() => handleRemoveItem(item.menu_item_id)}
-                          className="w-7 h-7 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center ml-1"
+                          className="w-7 h-7 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center ml-1 disabled:opacity-50"
                           title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -462,7 +487,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                disabled={savingOrder || cartItems.length === 0}
+                disabled={isReadOnly || savingOrder || cartItems.length === 0}
                 onClick={() => handleSaveOrder(true)}
                 className="py-2.5 px-3 bg-white hover:bg-slate-50 border border-[#E8E4DE] text-[#2B2623] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
               >
@@ -472,7 +497,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
               <button
                 type="button"
-                disabled={cartItems.length === 0}
+                disabled={isReadOnly || cartItems.length === 0}
                 onClick={handleOpenFinalBill}
                 className="py-2.5 px-3 bg-[#C2570C] hover:bg-[#A8480A] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1 active:scale-95 disabled:opacity-40"
               >
@@ -499,7 +524,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={savingOrder || cartItems.length === 0}
+              disabled={isReadOnly || savingOrder || cartItems.length === 0}
               onClick={() => handleSaveOrder(true)}
               className="py-2 px-3 bg-[#FAF9F7] text-[#2B2623] rounded-xl text-xs font-bold shadow-xs active:scale-95 disabled:opacity-40 flex items-center gap-1"
             >
@@ -509,7 +534,7 @@ export const WaiterOrderManagement = ({ table, onBack, onBillSubmitted }) => {
 
             <button
               type="button"
-              disabled={cartItems.length === 0}
+              disabled={isReadOnly || cartItems.length === 0}
               onClick={handleOpenFinalBill}
               className="py-2 px-4 bg-emerald-500 hover:bg-emerald-600 text-[#2B2623] font-bold rounded-xl text-xs shadow-sm active:scale-95 disabled:opacity-40 flex items-center gap-1"
             >

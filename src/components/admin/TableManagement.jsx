@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDhaba } from '../../context/DhabaContext';
 import { 
   Armchair, 
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const TableManagement = () => {
-  const { tables, addTable, updateTable } = useDhaba();
+  const { tables, orders, waiters, addTable, updateTable, reassignOrderWaiter } = useDhaba();
 
   const [isAdding, setIsAdding] = useState(false);
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -22,9 +22,15 @@ export const TableManagement = () => {
   const [editingTableId, setEditingTableId] = useState(null);
   const [editTableNumber, setEditTableNumber] = useState('');
   const [editCapacity, setEditCapacity] = useState('4');
+  const [selectedWaiters, setSelectedWaiters] = useState({});
+  const [assigningOrderId, setAssigningOrderId] = useState(null);
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    setSelectedWaiters({});
+  }, [orders]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -92,6 +98,22 @@ export const TableManagement = () => {
       setSuccess(`Table ${table.table_number} reset to Available.`);
     } catch (err) {
       setError(err.message || 'Failed to reset table');
+    }
+  };
+
+  const handleReassign = async (order) => {
+    const waiterId = selectedWaiters[order.id] || order.waiter_id;
+    if (waiterId === order.waiter_id) return;
+    setError('');
+    setSuccess('');
+    setAssigningOrderId(order.id);
+    try {
+      await reassignOrderWaiter(order.id, waiterId);
+      setSuccess(`Table assignment updated to ${waiters.find((waiter) => waiter.id === waiterId)?.full_name || 'selected waiter'}.`);
+    } catch (err) {
+      setError(err.message || 'Failed to reassign waiter');
+    } finally {
+      setAssigningOrderId(null);
     }
   };
 
@@ -208,6 +230,9 @@ export const TableManagement = () => {
         {tables.map((table) => {
           const isOccupied = table.status === 'occupied';
           const isAvailable = table.status === 'available';
+          const activeOrder = orders.find((order) =>
+            order.table_id === table.id && ['active', 'correction', 'in_review'].includes(order.status)
+          );
 
           const statusColor = isAvailable 
             ? 'border-emerald-500/40 bg-emerald-50/40 text-emerald-950'
@@ -284,6 +309,40 @@ export const TableManagement = () => {
                         {isAvailable ? 'Available' : isOccupied ? 'Occupied' : 'Bill Pending'}
                       </span>
                     </div>
+
+                    {activeOrder && (
+                      <div className="mb-3 space-y-1.5">
+                        <label htmlFor={`waiter-${activeOrder.id}`} className="block text-[10px] font-bold text-slate-600">
+                          Assigned: {activeOrder.profiles?.full_name || 'Waiter'}
+                        </label>
+                        <select
+                          id={`waiter-${activeOrder.id}`}
+                          value={selectedWaiters[activeOrder.id] || activeOrder.waiter_id}
+                          onChange={(event) => setSelectedWaiters((previous) => ({
+                            ...previous,
+                            [activeOrder.id]: event.target.value
+                          }))}
+                          className="w-full text-[11px] p-1.5 bg-white border border-[#E8E4DE] rounded-lg"
+                        >
+                          {!waiters.some((waiter) => waiter.id === activeOrder.waiter_id) && (
+                            <option value={activeOrder.waiter_id}>
+                              {activeOrder.profiles?.full_name || 'Current waiter'} (inactive)
+                            </option>
+                          )}
+                          {waiters.map((waiter) => (
+                            <option key={waiter.id} value={waiter.id}>{waiter.full_name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          disabled={assigningOrderId === activeOrder.id || (selectedWaiters[activeOrder.id] || activeOrder.waiter_id) === activeOrder.waiter_id}
+                          onClick={() => handleReassign(activeOrder)}
+                          className="w-full px-2 py-1.5 bg-white border border-[#E8E4DE] rounded-lg text-[10px] font-bold text-[#C2570C] disabled:opacity-40"
+                        >
+                          {assigningOrderId === activeOrder.id ? 'Reassigning…' : 'Reassign Waiter'}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-2 border-t border-black/10 flex items-center justify-between text-xs">

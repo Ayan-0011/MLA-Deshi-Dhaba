@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDhaba } from '../../context/DhabaContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatINR } from '../../lib/supabase';
 import { 
   Armchair, 
@@ -14,6 +15,7 @@ import {
 
 export const WaiterTableSelection = ({ onSelectTable }) => {
   const { tables, orders } = useDhaba();
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all'); // 'all' | 'available' | 'occupied' | 'bill_pending'
   const [search, setSearch] = useState('');
 
@@ -125,6 +127,8 @@ export const WaiterTableSelection = ({ onSelectTable }) => {
           const isPending = table.status === 'bill_pending';
 
           const activeOrder = activeOrdersMap[table.id];
+          const assignedWaiter = activeOrder?.profiles?.full_name || 'Assigned waiter';
+          const isAssignedWaiter = activeOrder?.waiter_id === user?.id;
           const runningTotal = activeOrder?.order_items?.reduce(
             (sum, item) => sum + (Number(item.unit_price) * Number(item.quantity)),
             0
@@ -178,6 +182,10 @@ export const WaiterTableSelection = ({ onSelectTable }) => {
 
                 {isOccupied && (
                   <div>
+                    <div className="text-[10px] text-amber-900 font-semibold mb-1">
+                      {isAssignedWaiter ? 'Your order' : `Assigned: ${assignedWaiter}`}
+                      {!isAssignedWaiter && <span className="ml-1 font-bold">• Read only</span>}
+                    </div>
                     <div className="text-[10px] text-amber-900 font-semibold uppercase">
                       Running Total
                     </div>
