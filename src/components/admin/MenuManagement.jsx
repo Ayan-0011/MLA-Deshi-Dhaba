@@ -179,14 +179,6 @@ export const MenuManagement = () => {
         </div>
       </div>
 
-      {/* Snapshot Pricing Info Notice */}
-      <div className="flex items-start gap-2.5 rounded-lg border border-info/30 bg-info-soft p-3 text-sm text-info-foreground">
-        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-        <p>
-          <strong>Price Protection:</strong> Updating a menu price here will immediately affect newly added items, but will <em>never</em> alter items already added to existing running orders or finalized bills.
-        </p>
-      </div>
-
       {error && (
         <div role="alert" className="flex items-center gap-2 rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger-foreground">
           <AlertCircle className="w-4 h-4 shrink-0" />

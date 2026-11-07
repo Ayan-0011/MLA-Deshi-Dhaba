@@ -97,22 +97,7 @@ export const AdminDashboard = ({ onViewChange, onSelectBill }) => {
             Real-time revenue, running table orders, and pending bill approvals.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => onViewChange('admin-bills')}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
-          >
-            <ReceiptText className="w-3.5 h-3.5" />
-            <span>Pending Bills ({metrics.pendingBillsCount})</span>
-          </button>
-          <button
-            onClick={() => onViewChange('admin-revenue')}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary-hover"
-          >
-            <TrendingUp className="w-3.5 h-3.5" />
-            <span>Revenue Breakdown</span>
-          </button>
-        </div>
+
       </div>
 
       {actionError && (
